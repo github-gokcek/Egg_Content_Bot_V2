@@ -62,7 +62,7 @@ module.exports = {
       const categoryName = `🎮 Maç #${gameId}`;
       const category = interaction.guild.channels.cache.find(c => c.name === categoryName && c.type === 4);
       
-      if (category) {
+      if (category && category.type === 4) {
         try {
           // Kategorideki tüm kanalları sil
           for (const [, channel] of category.children.cache) {

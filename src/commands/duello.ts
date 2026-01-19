@@ -73,7 +73,7 @@ module.exports = {
       }
 
       // Aktif düello kontrolü
-      const activeDuels = duelService.getUserActiveDuels(interaction.user.id);
+      const activeDuels = await duelService.getUserActiveDuels(interaction.user.id);
       if (activeDuels.length > 0) {
         return interaction.reply({
           content: '❌ Zaten aktif bir düellonuz var!',
@@ -81,7 +81,7 @@ module.exports = {
         });
       }
 
-      const opponentActiveDuels = duelService.getUserActiveDuels(opponent.id);
+      const opponentActiveDuels = await duelService.getUserActiveDuels(opponent.id);
       if (opponentActiveDuels.length > 0) {
         return interaction.reply({
           content: `❌ ${opponent.username} zaten aktif bir düelloda!`,
@@ -138,7 +138,7 @@ module.exports = {
         });
 
       } catch (error) {
-        duelService.deleteDuel(duel.id);
+        await duelService.deleteDuel(duel.id);
         Logger.error('Düello daveti gönderilemedi', error);
         await interaction.reply({
           content: '❌ Kullanıcıya DM gönderilemedi! DM\'leri kapalı olabilir.',
@@ -151,7 +151,7 @@ module.exports = {
       const duelId = interaction.options.getString('duello_id', true);
       const winner = interaction.options.getUser('kazanan', true);
 
-      const duel = duelService.getDuel(duelId);
+      const duel = await duelService.getDuel(duelId);
       if (!duel) {
         return interaction.reply({
           content: '❌ Düello bulunamadı!',
@@ -183,7 +183,7 @@ module.exports = {
       }
 
       // Düelloyu tamamla
-      duelService.completeDuel(duelId, winner.id);
+      await duelService.completeDuel(duelId, winner.id);
 
       // Bakiye transferi
       const winnerId = winner.id;

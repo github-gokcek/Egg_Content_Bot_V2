@@ -37,7 +37,10 @@ module.exports = {
         player = {
           discordId: interaction.user.id,
           username: interaction.user.username,
+          lolIgn: lolIgn || undefined,
+          tftIgn: tftIgn || undefined,
           balance: 100, // Başlangıç bakiyesi
+          createdAt: new Date(),
           stats: {
             lol: {
               wins: 0,
@@ -51,14 +54,10 @@ module.exports = {
             }
           }
         };
-      }
-
-      // IGN'leri güncelle
-      if (lolIgn) {
-        (player as any).lolIgn = lolIgn;
-      }
-      if (tftIgn) {
-        (player as any).tftIgn = tftIgn;
+      } else {
+        // Mevcut oyuncuyu güncelle
+        if (lolIgn) player.lolIgn = lolIgn;
+        if (tftIgn) player.tftIgn = tftIgn;
       }
 
       await databaseService.savePlayer(player);

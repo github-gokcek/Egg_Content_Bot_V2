@@ -1,3 +1,5 @@
+import { db } from './firebase';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Logger } from '../utils/logger';
 
 interface GroupInvite {
@@ -8,12 +10,10 @@ interface GroupInvite {
 }
 
 export class InviteService {
-  private invites: Map<string, GroupInvite> = new Map(); // inviteId -> invite
-
-  createInvite(groupId: string, invitedUserId: string, invitedBy: string): string {
+  async createInvite(groupId: string, invitedUserId: string, invitedBy: string): Promise<string> {
     const inviteId = `${groupId}_${invitedUserId}_${Date.now()}`;
     
-    this.invites.set(inviteId, {
+    await setDoc(doc(db, 'invites', inviteId), {
       groupId,
       invitedUserId,
       invitedBy,
@@ -24,12 +24,13 @@ export class InviteService {
     return inviteId;
   }
 
-  getInvite(inviteId: string): GroupInvite | undefined {
-    return this.invites.get(inviteId);
+  async getInvite(inviteId: string): Promise<GroupInvite | null> {
+    const docSnap = await getDoc(doc(db, 'invites', inviteId));
+    return docSnap.exists() ? docSnap.data() as GroupInvite : null;
   }
 
-  deleteInvite(inviteId: string): void {
-    this.invites.delete(inviteId);
+  async deleteInvite(inviteId: string): Promise<void> {
+    await deleteDoc(doc(db, 'invites', inviteId));
   }
 }
 

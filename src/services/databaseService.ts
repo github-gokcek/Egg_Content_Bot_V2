@@ -9,7 +9,8 @@ export class DatabaseService {
     try {
       await setDoc(doc(db, 'lol_matches', match.id), {
         ...match,
-        createdAt: match.createdAt.toISOString()
+        createdAt: match.createdAt.toISOString(),
+        completedAt: match.completedAt?.toISOString()
       });
       Logger.success('LoL maç Firebase\'e kaydedildi', { matchId: match.id });
     } catch (error) {
@@ -24,7 +25,8 @@ export class DatabaseService {
         const data = docSnap.data();
         return {
           ...data,
-          createdAt: new Date(data.createdAt)
+          createdAt: new Date(data.createdAt),
+          completedAt: data.completedAt ? new Date(data.completedAt) : undefined
         } as LolMatch;
       }
       return null;
@@ -38,7 +40,8 @@ export class DatabaseService {
     try {
       await updateDoc(doc(db, 'lol_matches', match.id), {
         ...match,
-        createdAt: match.createdAt.toISOString()
+        createdAt: match.createdAt.toISOString(),
+        completedAt: match.completedAt?.toISOString()
       });
       Logger.success('LoL maç güncellendi', { matchId: match.id });
     } catch (error) {
@@ -60,7 +63,8 @@ export class DatabaseService {
     try {
       await setDoc(doc(db, 'tft_matches', match.id), {
         ...match,
-        createdAt: match.createdAt.toISOString()
+        createdAt: match.createdAt.toISOString(),
+        completedAt: match.completedAt?.toISOString()
       });
       Logger.success('TFT maç Firebase\'e kaydedildi', { matchId: match.id });
     } catch (error) {
@@ -75,7 +79,8 @@ export class DatabaseService {
         const data = docSnap.data();
         return {
           ...data,
-          createdAt: new Date(data.createdAt)
+          createdAt: new Date(data.createdAt),
+          completedAt: data.completedAt ? new Date(data.completedAt) : undefined
         } as TftMatch;
       }
       return null;
@@ -89,7 +94,8 @@ export class DatabaseService {
     try {
       await updateDoc(doc(db, 'tft_matches', match.id), {
         ...match,
-        createdAt: match.createdAt.toISOString()
+        createdAt: match.createdAt.toISOString(),
+        completedAt: match.completedAt?.toISOString()
       });
       Logger.success('TFT maç güncellendi', { matchId: match.id });
     } catch (error) {
@@ -109,7 +115,10 @@ export class DatabaseService {
   // Players
   async savePlayer(player: Player): Promise<void> {
     try {
-      await setDoc(doc(db, 'players', player.discordId), player);
+      await setDoc(doc(db, 'players', player.discordId), {
+        ...player,
+        createdAt: player.createdAt.toISOString()
+      });
       Logger.success('Oyuncu Firebase\'e kaydedildi', { playerId: player.discordId });
     } catch (error) {
       Logger.error('Oyuncu kaydedilemedi', error);
@@ -120,14 +129,19 @@ export class DatabaseService {
     try {
       const docSnap = await getDoc(doc(db, 'players', discordId));
       if (docSnap.exists()) {
-        const data = docSnap.data() as Player;
+        const data = docSnap.data();
         // Bakiye yoksa veya NaN ise 100 olarak ayarla
         if (data.balance === undefined || data.balance === null || isNaN(data.balance)) {
           data.balance = 100;
-          await this.updatePlayer(data);
-          Logger.info('Oyuncu bakiyesi düzeltildi', { playerId: discordId, newBalance: 100 });
         }
-        return data;
+        // createdAt yoksa şimdi olarak ayarla
+        if (!data.createdAt) {
+          data.createdAt = new Date().toISOString();
+        }
+        return {
+          ...data,
+          createdAt: new Date(data.createdAt)
+        } as Player;
       }
       return null;
     } catch (error) {
@@ -138,7 +152,10 @@ export class DatabaseService {
 
   async updatePlayer(player: Player): Promise<void> {
     try {
-      await updateDoc(doc(db, 'players', player.discordId), player);
+      await updateDoc(doc(db, 'players', player.discordId), {
+        ...player,
+        createdAt: player.createdAt.toISOString()
+      });
       Logger.success('Oyuncu güncellendi', { playerId: player.discordId });
     } catch (error) {
       Logger.error('Oyuncu güncellenemedi', error);

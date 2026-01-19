@@ -1,0 +1,163 @@
+import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { factionService } from '../services/factionService';
+import { FactionType } from '../types/faction';
+import { Logger } from '../utils/logger';
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('faction')
+    .setDescription('Faction sistemi komutları')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('join')
+        .setDescription('Bir faction\'a katıl (Tier 1)')
+        .addStringOption(option =>
+          option.setName('faction')
+            .setDescription('Katılmak istediğiniz faction')
+            .setRequired(true)
+            .addChoices(
+              { name: '⚔️ Demacia', value: FactionType.DEMACIA },
+              { name: '⚔️ Noxus', value: FactionType.NOXUS },
+              { name: '🌸 Ionia', value: FactionType.IONIA },
+              { name: '⚙️ Piltover', value: FactionType.PILTOVER },
+              { name: '⚗️ Zaun', value: FactionType.ZAUN },
+              { name: '❄️ Freljord', value: FactionType.FRELJORD },
+              { name: '🏜️ Shurima', value: FactionType.SHURIMA },
+              { name: '🏴☠️ Bilgewater', value: FactionType.BILGEWATER }
+            )
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('progress')
+        .setDescription('Faction ilerlemenizi görüntüleyin')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('upgrade')
+        .setDescription('Tier 2\'ye yükseltin (FP ile)')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('info')
+        .setDescription('Faction sistemi hakkında bilgi')
+    ),
+
+  async execute(interaction: ChatInputCommandInteraction) {
+    const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === 'join') {
+      const factionType = interaction.options.getString('faction', true) as FactionType;
+      
+      const { databaseService } = await import('../services/databaseService');
+      const player = await databaseService.getPlayer(interaction.user.id);
+      
+      if (!player) {
+        return interaction.reply({ content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!', ephemeral: true });
+      }
+      
+      const tier1Price = 50;
+      const result = await factionService.joinFaction(interaction.user.id, factionType, player.balance, tier1Price);
+      
+      if (result.success) {
+        player.balance -= tier1Price;
+        await databaseService.updatePlayer(player);
+        
+        if (interaction.guild) {
+          const roleNames: Record<FactionType, string> = {
+            [FactionType.DEMACIA]: '⚔️ Demacia T1',
+            [FactionType.NOXUS]: '⚔️ Noxus T1',
+            [FactionType.IONIA]: '🌸 Ionia T1',
+            [FactionType.PILTOVER]: '⚙️ Piltover T1',
+            [FactionType.ZAUN]: '⚗️ Zaun T1',
+            [FactionType.FRELJORD]: '❄️ Freljord T1',
+            [FactionType.SHURIMA]: '🏜️ Shurima T1',
+            [FactionType.BILGEWATER]: '🏴☠️ Bilgewater T1',
+          };
+          
+          const roleName = roleNames[factionType];
+          const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+          if (role) {
+            const member = await interaction.guild.members.fetch(interaction.user.id);
+            await member.roles.add(role);
+          }
+        }
+        
+        await interaction.reply({ content: `✅ ${result.message} (${tier1Price} 🪙 harcandı)`, ephemeral: false });
+      } else {
+        await interaction.reply({ content: `❌ ${result.message}`, ephemeral: true });
+      }
+    }
+
+    else if (subcommand === 'progress') {
+      const progress = await factionService.getFactionProgress(interaction.user.id);
+      
+      if (!progress) {
+        return interaction.reply({ content: '❌ Bir faction\'a üye değilsiniz! `/faction join` kullanın.', ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle(`${progress.faction.toUpperCase()} - Tier ${progress.tier}`)
+        .setDescription('Faction ilerlemeniz')
+        .addFields(
+          { name: '💎 Faction Points', value: `${progress.currentFP} FP`, inline: true },
+          { name: '🎯 Sonraki Tier', value: `${progress.nextTierFP} FP`, inline: true },
+          { name: '📊 İlerleme', value: `${progress.progress.toFixed(1)}%`, inline: true },
+          { name: '⚡ Aktif Boost', value: `+${progress.boost}% FP`, inline: true },
+          { name: '📅 Haftalık FP', value: `${progress.weeklyFP} FP`, inline: true }
+        )
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    else if (subcommand === 'upgrade') {
+      const userFaction = await factionService.getUserFaction(interaction.user.id);
+      const result = await factionService.upgradeTier(interaction.user.id);
+      
+      if (result.success && userFaction) {
+        if (interaction.guild) {
+          const roleNames: Record<FactionType, string> = {
+            [FactionType.DEMACIA]: '⚔️ Demacia T2',
+            [FactionType.NOXUS]: '⚔️ Noxus T2',
+            [FactionType.IONIA]: '🌸 Ionia T2',
+            [FactionType.PILTOVER]: '⚙️ Piltover T2',
+            [FactionType.ZAUN]: '⚗️ Zaun T2',
+            [FactionType.FRELJORD]: '❄️ Freljord T2',
+            [FactionType.SHURIMA]: '🏜️ Shurima T2',
+            [FactionType.BILGEWATER]: '🏴☠️ Bilgewater T2',
+          };
+          
+          const roleName = roleNames[userFaction.factionType];
+          const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+          if (role) {
+            const member = await interaction.guild.members.fetch(interaction.user.id);
+            await member.roles.add(role);
+          }
+        }
+        await interaction.reply({ content: `✅ ${result.message}`, ephemeral: false });
+      } else {
+        await interaction.reply({ content: `❌ ${result.message}`, ephemeral: true });
+      }
+    }
+
+    else if (subcommand === 'info') {
+      const embed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('⚔️ Faction Sistemi')
+        .setDescription('League of Legends evrenindeki bölgelere özel faction sistemi!')
+        .addFields(
+          { name: '🎯 Nasıl Çalışır?', value: 'Bir faction\'a katılın, aktivitelerle **Faction Points (FP)** kazanın ve tier\'ınızı yükseltin!', inline: false },
+          { name: '💰 Tier 1', value: 'Giriş seviyesi - Normal para ile satın alınır\nFP kazanmaya başlarsınız', inline: true },
+          { name: '⭐ Tier 2', value: 'Sadece FP ile alınır (500 FP)\nFaction maçlarına katılabilirsiniz', inline: true },
+          { name: '💎 FP Kazanma', value: '• Maç katılımı: 5 FP\n• Maç tamamlama: 10 FP\n• Maç kazanma: 15 FP\n• Event: 25 FP', inline: false },
+          { name: '⚡ Progress Boost', value: '• %33 ilerleme: +10% FP\n• %66 ilerleme: +20% FP', inline: false }
+        )
+        .setFooter({ text: 'Faction vs Faction maçları yakında!' })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+  },
+};

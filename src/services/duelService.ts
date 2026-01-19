@@ -1,3 +1,5 @@
+import { db } from './firebase';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Logger } from '../utils/logger';
 
 interface Duel {
@@ -11,9 +13,7 @@ interface Duel {
 }
 
 export class DuelService {
-  private duels: Map<string, Duel> = new Map();
-
-  createDuel(challenger: string, challenged: string, amount: number): Duel {
+  async createDuel(challenger: string, challenged: string, amount: number): Promise<Duel> {
     const duel: Duel = {
       id: Date.now().toString(),
       challenger,
@@ -23,57 +23,62 @@ export class DuelService {
       createdAt: new Date()
     };
 
-    this.duels.set(duel.id, duel);
+    await setDoc(doc(db, 'duels', duel.id), duel);
     Logger.success('Düello oluşturuldu', { duelId: duel.id, challenger, challenged, amount });
     return duel;
   }
 
-  getDuel(id: string): Duel | undefined {
-    return this.duels.get(id);
+  async getDuel(id: string): Promise<Duel | null> {
+    const docSnap = await getDoc(doc(db, 'duels', id));
+    return docSnap.exists() ? docSnap.data() as Duel : null;
   }
 
-  acceptDuel(id: string): boolean {
-    const duel = this.duels.get(id);
+  async acceptDuel(id: string): Promise<boolean> {
+    const duel = await this.getDuel(id);
     if (duel && duel.status === 'pending') {
-      duel.status = 'accepted';
+      await updateDoc(doc(db, 'duels', id), { status: 'accepted' });
       Logger.info('Düello kabul edildi', { duelId: id });
       return true;
     }
     return false;
   }
 
-  completeDuel(id: string, winner: string): boolean {
-    const duel = this.duels.get(id);
+  async completeDuel(id: string, winner: string): Promise<boolean> {
+    const duel = await this.getDuel(id);
     if (duel && duel.status === 'accepted') {
-      duel.status = 'completed';
-      duel.winner = winner;
+      await updateDoc(doc(db, 'duels', id), { status: 'completed', winner });
       Logger.success('Düello tamamlandı', { duelId: id, winner });
       return true;
     }
     return false;
   }
 
-  cancelDuel(id: string): boolean {
-    const duel = this.duels.get(id);
+  async cancelDuel(id: string): Promise<boolean> {
+    const duel = await this.getDuel(id);
     if (duel && duel.status === 'pending') {
-      duel.status = 'cancelled';
+      await updateDoc(doc(db, 'duels', id), { status: 'cancelled' });
       Logger.info('Düello iptal edildi', { duelId: id });
       return true;
     }
     return false;
   }
 
-  deleteDuel(id: string): boolean {
-    const deleted = this.duels.delete(id);
-    if (deleted) Logger.info('Düello silindi', { duelId: id });
-    return deleted;
+  async deleteDuel(id: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'duels', id));
+      Logger.info('Düello silindi', { duelId: id });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  getUserActiveDuels(userId: string): Duel[] {
-    return Array.from(this.duels.values()).filter(
-      duel => (duel.challenger === userId || duel.challenged === userId) && 
-               (duel.status === 'pending' || duel.status === 'accepted')
-    );
+  async getUserActiveDuels(userId: string): Promise<Duel[]> {
+    const q = query(collection(db, 'duels'), where('status', 'in', ['pending', 'accepted']));
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map(doc => doc.data() as Duel)
+      .filter(duel => duel.challenger === userId || duel.challenged === userId);
   }
 }
 

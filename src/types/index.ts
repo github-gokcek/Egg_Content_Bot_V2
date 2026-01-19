@@ -39,6 +39,7 @@ export interface LolMatch {
   mode: LolMode;
   createdBy: string;
   createdAt: Date;
+  completedAt?: Date;
   status: 'waiting' | 'active' | 'completed';
   blueTeam: LolTeam;
   redTeam: LolTeam;
@@ -53,6 +54,7 @@ export interface TftMatch {
   mode: TftMode;
   createdBy: string;
   createdAt: Date;
+  completedAt?: Date;
   status: 'waiting' | 'active' | 'completed';
   players: string[]; // Solo için
   reserves: string[];
@@ -71,7 +73,10 @@ export interface TftMatch {
 export interface Player {
   discordId: string;
   username: string;
+  lolIgn?: string;
+  tftIgn?: string;
   balance: number; // Bakiye sistemi
+  createdAt: Date;
   stats: {
     lol: {
       wins: number;

@@ -1,0 +1,69 @@
+import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
+import { factionService } from '../services/factionService';
+import { FactionType } from '../types/faction';
+
+// Store items
+const STORE_ITEMS = {
+  [FactionType.DEMACIA]: [
+    { id: 'demacia_badge', name: '⚔️ Demacia Badge', fpCost: 100, description: 'Özel Demacia rozeti' },
+    { id: 'demacia_title', name: '👑 Demacia Title', fpCost: 200, description: 'İsminizin yanında "Demacian" yazısı' },
+  ],
+  [FactionType.BILGEWATER]: [
+    { id: 'bilgewater_badge', name: '🏴☠️ Bilgewater Badge', fpCost: 100, description: 'Özel Bilgewater rozeti' },
+    { id: 'bilgewater_title', name: '☠️ Bilgewater Title', fpCost: 200, description: 'İsminizin yanında "Pirate" yazısı' },
+  ],
+};
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('faction_store')
+    .setDescription('Faction mağazası - FP ile item satın al'),
+
+  async execute(interaction: ChatInputCommandInteraction) {
+    const userFaction = await factionService.getUserFaction(interaction.user.id);
+
+    if (!userFaction) {
+      return interaction.reply({ 
+        content: '❌ Bir faction\'a üye değilsiniz! `/faction join` kullanın.', 
+        ephemeral: true 
+      });
+    }
+
+    const items = STORE_ITEMS[userFaction.factionType];
+
+    const embed = new EmbedBuilder()
+      .setColor(0xf39c12)
+      .setTitle(`🏪 ${userFaction.factionType.toUpperCase()} Store`)
+      .setDescription(`Mevcut FP: **${userFaction.factionPoints}** 💎`)
+      .setFooter({ text: 'Item satın almak için aşağıdan seçin' })
+      .setTimestamp();
+
+    let itemsList = '';
+    items.forEach((item, index) => {
+      itemsList += `**${index + 1}. ${item.name}**\n`;
+      itemsList += `├ Fiyat: ${item.fpCost} FP\n`;
+      itemsList += `└ ${item.description}\n\n`;
+    });
+
+    embed.addFields({
+      name: '📦 Ürünler',
+      value: itemsList,
+      inline: false
+    });
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('faction_store_select')
+      .setPlaceholder('Satın almak istediğiniz ürünü seçin')
+      .addOptions(
+        items.map((item, index) => ({
+          label: item.name,
+          description: `${item.fpCost} FP - ${item.description}`,
+          value: item.id,
+        }))
+      );
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+  },
+};

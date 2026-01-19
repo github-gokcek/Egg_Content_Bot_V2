@@ -20,7 +20,7 @@ module.exports = {
     .addUserOption(opt => opt.setName('sekizinci').setDescription('8. olan oyuncu/grup').setRequired(false)),
   async execute(interaction: ChatInputCommandInteraction) {
     const gameId = interaction.options.getString('game_id', true);
-    const match = matchService.getTftMatch(gameId);
+    const match = await matchService.getTftMatch(gameId);
 
     if (!match) {
       return interaction.reply({ content: '❌ Maç bulunamadı!', ephemeral: true });
@@ -58,7 +58,7 @@ module.exports = {
       }
     }
 
-    matchService.completeTftMatch(gameId, rankings);
+    await matchService.completeTftMatch(gameId, rankings);
 
     // İstatistikleri güncelle (sadece Solo için)
     if (match.mode === TftMode.SOLO) {

@@ -30,13 +30,66 @@ module.exports = {
 
     // Select Menu
     if (interaction.isStringSelectMenu()) {
+      // Faction Store
+      if (interaction.customId === 'faction_store_select') {
+        const itemId = interaction.values[0];
+        const { factionService } = await import('../services/factionService');
+        
+        const userFaction = await factionService.getUserFaction(interaction.user.id);
+        if (!userFaction) {
+          return interaction.update({ content: '❌ Bir faction\'a üye değilsiniz!', components: [] });
+        }
+
+        // Find item
+        const STORE_ITEMS: any = {
+          demacia: [
+            { id: 'demacia_badge', name: '⚔️ Demacia Badge', fpCost: 100 },
+            { id: 'demacia_title', name: '👑 Demacia Title', fpCost: 200 },
+          ],
+          bilgewater: [
+            { id: 'bilgewater_badge', name: '🏴☠️ Bilgewater Badge', fpCost: 100 },
+            { id: 'bilgewater_title', name: '☠️ Bilgewater Title', fpCost: 200 },
+          ],
+        };
+
+        const items = STORE_ITEMS[userFaction.factionType];
+        const item = items.find((i: any) => i.id === itemId);
+
+        if (!item) {
+          return interaction.update({ content: '❌ Ürün bulunamadı!', components: [] });
+        }
+
+        // Check FP
+        if (userFaction.factionPoints < item.fpCost) {
+          return interaction.update({ 
+            content: `❌ Yetersiz FP! Gerekli: ${item.fpCost} FP, Mevcut: ${userFaction.factionPoints} FP`, 
+            components: [] 
+          });
+        }
+
+        // Deduct FP
+        const { db } = await import('../services/firebase');
+        const { doc, updateDoc, increment } = await import('firebase/firestore');
+        await updateDoc(doc(db, 'userFactions', interaction.user.id), {
+          factionPoints: increment(-item.fpCost),
+        });
+
+        // TODO: Give item (badge/title role)
+        
+        await interaction.update({ 
+          content: `✅ **${item.name}** satın alındı! (${item.fpCost} FP harcandı)`, 
+          components: [] 
+        });
+        return;
+      }
+
       if (interaction.customId === 'select_game_mode') {
         try {
           const value = interaction.values[0];
           
           if (value.startsWith('lol_')) {
             const mode = value === 'lol_summoners_rift' ? LolMode.SUMMONERS_RIFT : LolMode.ARAM;
-            const match = matchService.createLolMatch(mode, interaction.user.id, interaction.channelId!);
+            const match = await matchService.createLolMatch(mode, interaction.user.id, interaction.channelId!);
             
             const embed = EmbedBuilder.createLolMatchEmbed(match);
             const buttons = ComponentBuilder.createLolTeamButtons(mode);
@@ -62,7 +115,7 @@ module.exports = {
           }
           else if (value.startsWith('tft_')) {
             const mode = value === 'tft_solo' ? TftMode.SOLO : TftMode.DOUBLE;
-            const match = matchService.createTftMatch(mode, interaction.user.id, interaction.channelId!);
+            const match = await matchService.createTftMatch(mode, interaction.user.id, interaction.channelId!);
             
             const embed = EmbedBuilder.createTftMatchEmbed(match);
             const buttons = ComponentBuilder.createTftButtons(mode === TftMode.DOUBLE ? 'double' : 'solo');
@@ -100,7 +153,7 @@ module.exports = {
         const duelId = interaction.customId.replace('duel_accept_', '').replace('duel_decline_', '');
         const { duelService } = await import('../services/duelService');
         
-        const duel = duelService.getDuel(duelId);
+        const duel = await duelService.getDuel(duelId);
         if (!duel) {
           return interaction.update({ content: '❌ Bu düello artık geçerli değil!', components: [] });
         }
@@ -110,14 +163,14 @@ module.exports = {
         }
 
         if (interaction.customId.startsWith('duel_accept_')) {
-          duelService.acceptDuel(duelId);
+          await duelService.acceptDuel(duelId);
           await interaction.update({ 
             content: `✅ Düelloyu kabul ettiniz! Artık kendi aranızda maç kurup oynayabilirsiniz.\n**Düello ID:** \`${duelId}\`\n**Bahis:** ${duel.amount} 🪙\n\nMaç bitince \`/duello sonuc\` komutu ile sonucu girin.`,
             components: [] 
           });
           Logger.success('Düello kabul edildi', { duelId, challenged: interaction.user.id });
         } else {
-          duelService.cancelDuel(duelId);
+          await duelService.cancelDuel(duelId);
           await interaction.update({ content: '❌ Düelloyu reddettiniz.', components: [] });
           Logger.info('Düello reddedildi', { duelId, challenged: interaction.user.id });
         }
@@ -130,7 +183,7 @@ module.exports = {
         const { inviteService } = await import('../services/inviteService');
         const { groupService } = await import('../services/groupService');
         
-        const invite = inviteService.getInvite(inviteId);
+        const invite = await inviteService.getInvite(inviteId);
         if (!invite) {
           return interaction.update({ content: '❌ Bu davet artık geçerli değil!', components: [] });
         }
@@ -141,14 +194,14 @@ module.exports = {
 
         if (interaction.customId.startsWith('group_accept_')) {
           try {
-            const group = groupService.getGroup(invite.groupId);
+            const group = await groupService.getGroup(invite.groupId);
             if (!group) {
-              inviteService.deleteInvite(inviteId);
+              await inviteService.deleteInvite(inviteId);
               return interaction.update({ content: '❌ Grup artık mevcut değil!', components: [] });
             }
 
-            groupService.addMember(invite.groupId, interaction.user.id);
-            inviteService.deleteInvite(inviteId);
+            await groupService.addMember(invite.groupId, interaction.user.id);
+            await inviteService.deleteInvite(inviteId);
             
             await interaction.update({ 
               content: `✅ **${group.name}** grubuna katıldınız!`,
@@ -160,7 +213,7 @@ module.exports = {
             await interaction.update({ content: `❌ ${error.message}`, components: [] });
           }
         } else {
-          inviteService.deleteInvite(inviteId);
+          await inviteService.deleteInvite(inviteId);
           await interaction.update({ content: '❌ Grup davetini reddettiniz.', components: [] });
           Logger.info('Grup daveti reddedildi', { groupId: invite.groupId, userId: interaction.user.id });
         }
@@ -258,7 +311,7 @@ module.exports = {
       // İzleme butonları için handler ekle
       if (interaction.customId.startsWith('watch_')) {
         const [action, team, matchId] = interaction.customId.split('_');
-        const match = matchService.getLolMatch(matchId);
+        const match = await matchService.getLolMatch(matchId);
         
         if (!match || match.status !== 'active') {
           return interaction.reply({ content: '❌ Bu maç aktif değil!', ephemeral: true });
@@ -311,7 +364,7 @@ module.exports = {
           return interaction.reply({ content: '❌ Maç bulunamadı!', ephemeral: true });
         }
 
-        const tftMatch = matchService.getTftMatch(tftMatchId);
+        const tftMatch = await matchService.getTftMatch(tftMatchId);
         if (!tftMatch) {
           return interaction.reply({ content: '❌ Maç bulunamadı!', ephemeral: true });
         }
@@ -326,7 +379,7 @@ module.exports = {
             return interaction.reply({ content: '❌ Double Up modunda takım seçmelisiniz!', ephemeral: true });
           }
           
-          const added = matchService.addPlayerToTftMatch(tftMatchId, interaction.user.id, false);
+          const added = await matchService.addPlayerToTftMatch(tftMatchId, interaction.user.id, false);
           if (!added) {
             return interaction.reply({ content: '❌ Oyuna katılamadınız! (Dolu veya zaten oyundayısınız)', ephemeral: true });
           }
@@ -334,8 +387,8 @@ module.exports = {
           await interaction.reply({ content: '✅ Oyuna katıldınız!', ephemeral: true });
 
         // 8 kişi doldu mu?
-        if (matchService.isTftMatchFull(tftMatchId)) {
-          matchService.startTftMatch(tftMatchId);
+        if (await matchService.isTftMatchFull(tftMatchId)) {
+          await matchService.startTftMatch(tftMatchId);
           
           // Eski mesajı sil ve yeni "oyun başladı" mesajı at
           await interaction.message.delete();
@@ -385,7 +438,7 @@ module.exports = {
             return interaction.reply({ content: '❌ Bu sadece Double Up modu için!', ephemeral: true });
           }
 
-          const userGroup = (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
+          const userGroup = await (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
           if (!userGroup) {
             return interaction.reply({ content: '❌ Double Up için grup oluşturmalısınız! `/grup olustur` kullanın.', ephemeral: true });
           }
@@ -483,7 +536,7 @@ module.exports = {
           }
         }
         else if (interaction.customId === 'tft_join_reserve') {
-          const added = matchService.addPlayerToTftMatch(tftMatchId, interaction.user.id, true);
+          const added = await matchService.addPlayerToTftMatch(tftMatchId, interaction.user.id, true);
           if (!added) {
             return interaction.reply({ content: '❌ Yedek olarak katılamadınız!', ephemeral: true });
           }
@@ -493,7 +546,7 @@ module.exports = {
         else if (interaction.customId === 'tft_leave') {
           if (tftMatch.mode === TftMode.DOUBLE) {
             // Double Up - grup bazlı çıkma
-            const userGroup = (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
+            const userGroup = await (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
             if (!userGroup) {
               return interaction.reply({ content: '❌ Bir grupta değilsiniz!', ephemeral: true });
             }
@@ -518,7 +571,7 @@ module.exports = {
             await interaction.reply({ content: `✅ **${userGroup.name}** grubu maçtan ayrıldı!`, ephemeral: true });
           } else {
             // Solo - normal çıkma
-            const removed = matchService.removePlayerFromTftMatch(tftMatchId, interaction.user.id);
+            const removed = await matchService.removePlayerFromTftMatch(tftMatchId, interaction.user.id);
             if (!removed) {
               return interaction.reply({ content: '❌ Bu maçta değilsiniz!', ephemeral: true });
             }
@@ -568,7 +621,7 @@ module.exports = {
         return interaction.reply({ content: '❌ Maç bulunamadı!', ephemeral: true });
       }
 
-      const match = matchService.getLolMatch(matchId);
+      const match = await matchService.getLolMatch(matchId);
       if (!match) {
         return interaction.reply({ content: '❌ Maç bulunamadı!', ephemeral: true });
       }
@@ -579,7 +632,7 @@ module.exports = {
 
       // Ayrıl butonu
       if (interaction.customId === 'leave_match') {
-        const removed = matchService.removePlayerFromLolMatch(matchId, interaction.user.id);
+        const removed = await matchService.removePlayerFromLolMatch(matchId, interaction.user.id);
         if (removed) {
           await updateMatchMessage(interaction, match);
           return interaction.reply({ content: '✅ Maçtan ayrıldınız!', ephemeral: true });
@@ -728,7 +781,7 @@ module.exports = {
         
         if (match.mode === LolMode.ARAM) {
           // Grup kontrolü
-          const userGroup = (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
+          const userGroup = await (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
           
           if (userGroup) {
             // Grup olarak katıl
@@ -741,7 +794,7 @@ module.exports = {
 
             // Tüm grup üyelerini çıkart (başka takımdalarsa)
             for (const memberId of userGroup.members) {
-              matchService.removePlayerFromLolMatch(matchId, memberId);
+              await matchService.removePlayerFromLolMatch(matchId, memberId);
             }
 
             // Tüm grup üyelerini ekle
@@ -769,7 +822,7 @@ module.exports = {
               return interaction.reply({ content: '❌ Bu takım dolu!', ephemeral: true });
             }
 
-            matchService.removePlayerFromLolMatch(matchId, interaction.user.id);
+            await matchService.removePlayerFromLolMatch(matchId, interaction.user.id);
             
             for (let i = 0; i < 5; i++) {
               const role = Object.values(LolRole)[i];
@@ -784,7 +837,7 @@ module.exports = {
           }
         } else {
           // Sihirdar Vadisi - grup kontrolü
-          const userGroup = (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
+          const userGroup = await (await import('../services/groupService')).groupService.getUserGroup(interaction.user.id);
           
           if (userGroup) {
             return interaction.reply({ content: '❌ Sihirdar Vadisi modunda grup ile katılamazsınız! Önce `/grup cik` yapın.', ephemeral: true });
@@ -794,9 +847,9 @@ module.exports = {
           const role = roleStr as LolRole;
           
           // Oyuncu zaten başka yerde mi?
-          matchService.removePlayerFromLolMatch(matchId, interaction.user.id);
+          await matchService.removePlayerFromLolMatch(matchId, interaction.user.id);
           
-          const added = matchService.addPlayerToLolMatch(matchId, team, role, interaction.user.id);
+          const added = await matchService.addPlayerToLolMatch(matchId, team, role, interaction.user.id);
           if (!added) {
             return interaction.reply({ content: '❌ Bu pozisyon dolu!', ephemeral: true });
           }
@@ -806,8 +859,8 @@ module.exports = {
         }
 
         // Maç dolu mu kontrol et
-        if (matchService.isLolMatchFull(matchId)) {
-          matchService.startLolMatch(matchId);
+        if (await matchService.isLolMatchFull(matchId)) {
+          await matchService.startLolMatch(matchId);
           
           // Kategori ve ses kanalları oluştur
           if (interaction.guild) {
@@ -933,17 +986,19 @@ module.exports = {
 };
 
 async function findMatchByMessage(messageId: string): Promise<string | null> {
-  const allMatches = matchService['lolMatches'];
-  for (const [id, match] of allMatches) {
-    if (match.messageId === messageId) return id;
+  const snapshot = await getDocs(collection(db, 'lol_matches'));
+  for (const docSnap of snapshot.docs) {
+    const match = docSnap.data();
+    if (match.messageId === messageId) return docSnap.id;
   }
   return null;
 }
 
 async function findTftMatchByMessage(messageId: string): Promise<string | null> {
-  const allMatches = matchService['tftMatches'];
-  for (const [id, match] of allMatches) {
-    if (match.messageId === messageId) return id;
+  const snapshot = await getDocs(collection(db, 'tft_matches'));
+  for (const docSnap of snapshot.docs) {
+    const match = docSnap.data();
+    if (match.messageId === messageId) return docSnap.id;
   }
   return null;
 }

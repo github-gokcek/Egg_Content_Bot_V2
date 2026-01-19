@@ -31,7 +31,7 @@ module.exports = {
       const name = interaction.options.getString('isim', true);
       
       try {
-        const group = groupService.createGroup(interaction.user.id, name);
+        const group = await groupService.createGroup(interaction.user.id, name);
         await interaction.reply({
           content: `✅ **${name}** grubu oluşturuldu!\n\`/grup davet\` komutu ile üye ekleyebilirsiniz.`,
           ephemeral: true
@@ -43,7 +43,7 @@ module.exports = {
 
     else if (subcommand === 'davet') {
       const user = interaction.options.getUser('kullanici', true);
-      const group = groupService.getUserGroup(interaction.user.id);
+      const group = await groupService.getUserGroup(interaction.user.id);
 
       if (!group) {
         return interaction.reply({ content: '❌ Bir grupta değilsiniz!', ephemeral: true });
@@ -53,7 +53,7 @@ module.exports = {
         return interaction.reply({ content: '❌ Kendinizi davet edemezsiniz!', ephemeral: true });
       }
 
-      if (groupService.isInGroup(user.id)) {
+      if (await groupService.isInGroup(user.id)) {
         return interaction.reply({ content: '❌ Bu kullanıcı zaten bir grupta!', ephemeral: true });
       }
 
@@ -79,7 +79,7 @@ module.exports = {
           return;
         }
         
-        const inviteId = inviteService.createInvite(group.id, user.id, interaction.user.id);
+        const inviteId = await inviteService.createInvite(group.id, user.id, interaction.user.id);
         
         // DM gönder
         const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder: DiscordEmbedBuilder } = await import('discord.js');
@@ -122,7 +122,7 @@ module.exports = {
     }
 
     else if (subcommand === 'cik') {
-      const left = groupService.leaveGroup(interaction.user.id);
+      const left = await groupService.leaveGroup(interaction.user.id);
       if (left) {
         await interaction.reply({ content: '✅ Gruptan ayrıldınız!', ephemeral: true });
       } else {
@@ -131,7 +131,7 @@ module.exports = {
     }
 
     else if (subcommand === 'bilgi') {
-      const group = groupService.getUserGroup(interaction.user.id);
+      const group = await groupService.getUserGroup(interaction.user.id);
       if (!group) {
         return interaction.reply({ content: '❌ Bir grupta değilsiniz!', ephemeral: true });
       }

@@ -14,6 +14,7 @@ module.exports = {
           { name: '💬 Mesaj Sistemi', value: 'mesaj' },
           { name: '💰 Bakiye Sistemi', value: 'bakiye' },
           { name: '⚔️ Düello Sistemi', value: 'duello' },
+          { name: '🏴☠️ Faction Sistemi', value: 'faction' },
           { name: '📋 Tüm Komutlar', value: 'komut' },
           { name: '🚀 Başlangıç Rehberi', value: 'onboarding' }
         )
@@ -345,6 +346,64 @@ Düello Kazanma: Bahis miktarı kadar
           .setFooter({ text: 'Şansını dene, ama dikkatli ol! ⚔️' });
         break;
 
+      case 'faction':
+        embed = new EmbedBuilder()
+          .setColor(0xf39c12)
+          .setTitle('🏴☠️ Faction Sistemi Rehberi')
+          .setDescription('League of Legends evrenindeki bölgelere özel faction sistemi!')
+          .addFields(
+            {
+              name: '🎯 Faction Nedir?',
+              value: `**Faction sistemi ile:**
+• Bir bölgeye ait olursun (Demacia, Bilgewater)
+• Aktivitelerle **Faction Points (FP)** kazanırsın
+• FP ile tier yükseltir ve özel itemler alırsın
+• Faction vs Faction maçlarına katılırsın`,
+              inline: false
+            },
+            {
+              name: '💰 Faction Katılma',
+              value: `**Tier 1 Satın Al:**
+\`\`\`
+/faction join faction:Demacia
+\`\`\`
+• Fiyat: **50 coin**
+• FP kazanmaya başlarsın`,
+              inline: false
+            },
+            {
+              name: '💎 FP Kazanma',
+              value: `**Nasıl FP Kazanılır:**
+• Maç kazanma: **15 FP**
+• Maç tamamlama: **10 FP**
+• Ses kanalı: **1 FP/10dk**
+
+**Progress Boost:**
+• %33: **+10% FP**
+• %66: **+20% FP**`,
+              inline: false
+            },
+            {
+              name: '⬆️ Tier 2',
+              value: `\`\`\`
+/faction upgrade
+\`\`\`
+• Gerekli: **500 FP**
+• Faction maçlarına katıl`,
+              inline: false
+            },
+            {
+              name: '📊 Diğer Komutlar',
+              value: `\`/faction progress\` - İlerleme
+\`/faction_store\` - Mağaza
+\`/faction_leaderboard\` - Sıralama
+\`/faction_match\` - Faction maçı`,
+              inline: false
+            }
+          )
+          .setFooter({ text: 'Factionını seç, güçlendir! 🏴☠️' });
+        break;
+
       case 'komut':
         embed = new EmbedBuilder()
           .setColor(0x2ecc71)
@@ -373,8 +432,15 @@ Düello Kazanma: Bahis miktarı kadar
               value: `\`/market\` - Rol al/sat
 \`/duello\` - Düello başlat
 \`/profil\` - Profil görüntüle
-\`/liderlik\` - Liderlik tablosu
-\`/gunluk_bonus\` - Günlük bonus al`,
+\`/liderlik\` - Liderlik tablosu`,
+              inline: true
+            },
+            {
+              name: '🏴☠️ Faction Komutları',
+              value: `\`/faction\` - Faction sistemi
+\`/faction_store\` - FP mağazası
+\`/faction_leaderboard\` - Sıralama
+\`/faction_match\` - Faction maçı`,
               inline: true
             },
             {

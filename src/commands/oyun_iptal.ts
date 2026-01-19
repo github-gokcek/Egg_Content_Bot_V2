@@ -15,11 +15,11 @@ module.exports = {
     const gameId = interaction.options.getString('game_id', true);
     
     // LoL veya TFT maçı olabilir
-    let match = matchService.getLolMatch(gameId);
+    let match = await matchService.getLolMatch(gameId);
     let isTft = false;
     
     if (!match) {
-      match = matchService.getTftMatch(gameId) as any;
+      match = await matchService.getTftMatch(gameId) as any;
       isTft = true;
     }
 
@@ -36,9 +36,9 @@ module.exports = {
     }
 
     if (isTft) {
-      matchService.deleteTftMatch(gameId);
+      await matchService.deleteTftMatch(gameId);
     } else {
-      matchService.deleteLolMatch(gameId);
+      await matchService.deleteLolMatch(gameId);
     }
     
     // Mesajı sil

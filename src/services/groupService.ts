@@ -1,3 +1,5 @@
+import { db } from './firebase';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { Logger } from '../utils/logger';
 
 interface Group {
@@ -8,11 +10,9 @@ interface Group {
 }
 
 export class GroupService {
-  private groups: Map<string, Group> = new Map();
-  private userGroups: Map<string, string> = new Map(); // userId -> groupId
-
-  createGroup(leaderId: string, name: string): Group {
-    if (this.userGroups.has(leaderId)) {
+  async createGroup(leaderId: string, name: string): Promise<Group> {
+    const userGroup = await this.getUserGroup(leaderId);
+    if (userGroup) {
       throw new Error('Zaten bir gruptasınız!');
     }
 
@@ -23,26 +23,33 @@ export class GroupService {
       createdAt: new Date()
     };
 
-    this.groups.set(group.id, group);
-    this.userGroups.set(leaderId, group.id);
+    await setDoc(doc(db, 'groups', group.id), group);
     Logger.success('Grup oluşturuldu', { groupId: group.id, name, leader: leaderId });
     return group;
   }
 
-  getGroup(groupId: string): Group | undefined {
-    return this.groups.get(groupId);
+  async getGroup(groupId: string): Promise<Group | null> {
+    const docSnap = await getDoc(doc(db, 'groups', groupId));
+    return docSnap.exists() ? docSnap.data() as Group : null;
   }
 
-  getUserGroup(userId: string): Group | undefined {
-    const groupId = this.userGroups.get(userId);
-    return groupId ? this.groups.get(groupId) : undefined;
+  async getUserGroup(userId: string): Promise<Group | null> {
+    const snapshot = await getDocs(collection(db, 'groups'));
+    for (const docSnap of snapshot.docs) {
+      const group = docSnap.data() as Group;
+      if (group.members.includes(userId)) {
+        return group;
+      }
+    }
+    return null;
   }
 
-  addMember(groupId: string, userId: string): boolean {
-    const group = this.groups.get(groupId);
+  async addMember(groupId: string, userId: string): Promise<boolean> {
+    const group = await this.getGroup(groupId);
     if (!group) return false;
 
-    if (this.userGroups.has(userId)) {
+    const userGroup = await this.getUserGroup(userId);
+    if (userGroup) {
       throw new Error('Kullanıcı zaten bir grupta!');
     }
 
@@ -51,27 +58,23 @@ export class GroupService {
     }
 
     group.members.push(userId);
-    this.userGroups.set(userId, groupId);
+    await updateDoc(doc(db, 'groups', groupId), { members: group.members });
     Logger.info('Gruba üye eklendi', { groupId, userId });
     return true;
   }
 
-  leaveGroup(userId: string): boolean {
-    const groupId = this.userGroups.get(userId);
-    if (!groupId) return false;
-
-    const group = this.groups.get(groupId);
+  async leaveGroup(userId: string): Promise<boolean> {
+    const group = await this.getUserGroup(userId);
     if (!group) return false;
 
     group.members = group.members.filter(m => m !== userId);
-    this.userGroups.delete(userId);
 
-    // Grup boşaldı mı?
     if (group.members.length === 0) {
-      this.groups.delete(groupId);
-      Logger.info('Grup silindi (boş)', { groupId });
+      await deleteDoc(doc(db, 'groups', group.id));
+      Logger.info('Grup silindi (boş)', { groupId: group.id });
     } else {
-      Logger.info('Kullanıcı gruptan ayrıldı', { groupId, userId });
+      await updateDoc(doc(db, 'groups', group.id), { members: group.members });
+      Logger.info('Kullanıcı gruptan ayrıldı', { groupId: group.id, userId });
     }
 
     return true;
@@ -82,8 +85,9 @@ export class GroupService {
     return sorted;
   }
 
-  isInGroup(userId: string): boolean {
-    return this.userGroups.has(userId);
+  async isInGroup(userId: string): Promise<boolean> {
+    const group = await this.getUserGroup(userId);
+    return group !== null;
   }
 }
 

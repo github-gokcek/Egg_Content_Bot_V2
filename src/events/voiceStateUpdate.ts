@@ -1,9 +1,13 @@
 import { Events, VoiceState } from 'discord.js';
 import { Logger } from '../utils/logger';
+import { voiceActivityService } from '../services/voiceActivityService';
 
 module.exports = {
   name: Events.VoiceStateUpdate,
   async execute(oldState: VoiceState, newState: VoiceState) {
+    // Voice activity tracking
+    await voiceActivityService.handleVoiceStateUpdate(oldState, newState);
+
     // Maç kanalından çıkan izleyicilerin susturmasını kaldır
     if (oldState.channel && oldState.channel.parent?.name.startsWith('🎮 Maç #')) {
       // Maç kanalından ayrıldı

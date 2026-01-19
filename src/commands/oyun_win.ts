@@ -26,7 +26,7 @@ module.exports = {
     const gameId = interaction.options.getString('game_id', true);
     const winner = interaction.options.getString('kazanan', true) as Team;
     
-    const match = matchService.getLolMatch(gameId);
+    const match = await matchService.getLolMatch(gameId);
 
     if (!match) {
       return interaction.reply({ content: '❌ Maç bulunamadı!', ephemeral: true });
@@ -55,7 +55,7 @@ module.exports = {
       ephemeral: false 
     });
 
-    matchService.completeLolMatch(gameId, winner);
+    await matchService.completeLolMatch(gameId, winner);
 
     // Maç kanallarını sil
     if (interaction.guild) {
@@ -80,6 +80,19 @@ module.exports = {
     // İstatistikleri güncelle
     const { playerStatsService } = await import('../services/playerStatsService');
     await playerStatsService.updateLolStats([], winner, match.blueTeam, match.redTeam);
+
+    // Faction Points ver
+    const { factionService } = await import('../services/factionService');
+    const { FP_RATES } = await import('../types/faction');
+    
+    const allPlayers = [...Object.values(match.blueTeam), ...Object.values(match.redTeam)];
+    const winnerPlayers = winner === Team.BLUE ? Object.values(match.blueTeam) : Object.values(match.redTeam);
+    
+    for (const playerId of allPlayers) {
+      const isWinner = winnerPlayers.includes(playerId);
+      const fpAmount = isWinner ? FP_RATES.MATCH_WIN : FP_RATES.MATCH_COMPLETION;
+      await factionService.awardFP(playerId, fpAmount, isWinner ? 'match_win' : 'match_completion', { matchId: gameId });
+    }
 
     // Mesajı güncelle
     if (match.messageId && match.channelId) {

@@ -4,6 +4,7 @@ import { readdirSync } from 'fs';
 import { join } from 'path';
 import 'dotenv/config';
 import { Logger } from './utils/logger';
+import { voiceActivityService } from './services/voiceActivityService';
 
 const client = new Client({ intents: config.intents });
 
@@ -33,5 +34,8 @@ for (const file of eventFiles) {
   }
   Logger.info(`Event yüklendi: ${event.name}`);
 }
+
+// Start voice activity tracking
+voiceActivityService.start();
 
 client.login(config.token);

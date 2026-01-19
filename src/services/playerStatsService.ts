@@ -79,6 +79,7 @@ export class PlayerStatsService {
         discordId,
         username: 'Unknown',
         balance: 100,
+        createdAt: new Date(),
         stats: {
           lol: { wins: 0, losses: 0 },
           tft: { matches: 0, top4: 0, rankings: [], points: 0 }

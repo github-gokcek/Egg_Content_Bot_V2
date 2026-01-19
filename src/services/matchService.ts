@@ -4,11 +4,9 @@ import { databaseService } from './databaseService';
 import { botStatusService } from './botStatusService';
 
 export class MatchService {
-  private lolMatches: Map<string, LolMatch> = new Map();
-  private tftMatches: Map<string, TftMatch> = new Map();
 
   // LoL Methods
-  createLolMatch(mode: LolMode, createdBy: string, channelId: string): LolMatch {
+  async createLolMatch(mode: LolMode, createdBy: string, channelId: string): Promise<LolMatch> {
     const match: LolMatch = {
       id: botStatusService.isDevMode() ? botStatusService.generateTestId() : Date.now().toString(),
       mode,
@@ -20,44 +18,42 @@ export class MatchService {
       channelId,
     };
     
-    this.lolMatches.set(match.id, match);
-    
-    if (botStatusService.isLiveMode()) {
-      databaseService.saveLolMatch(match); // Sadece live modda Firebase'e kaydet
-    }
-    
+    await databaseService.saveLolMatch(match);
     Logger.success(`LoL ${mode} maçı oluşturuldu ${botStatusService.isDevMode() ? '(TEST MODU)' : ''}`, { id: match.id, createdBy });
     return match;
   }
 
-  getLolMatch(id: string): LolMatch | undefined {
-    return this.lolMatches.get(id);
+  async getLolMatch(id: string): Promise<LolMatch | null> {
+    return await databaseService.getLolMatch(id);
   }
 
-  addPlayerToLolMatch(matchId: string, team: Team, role: LolRole, playerId: string): boolean {
-    const match = this.lolMatches.get(matchId);
+  async addPlayerToLolMatch(matchId: string, team: Team, role: LolRole, playerId: string): Promise<boolean> {
+    const match = await this.getLolMatch(matchId);
     if (!match || match.status !== 'waiting') return false;
 
     const targetTeam = team === Team.BLUE ? match.blueTeam : match.redTeam;
     if (targetTeam[role]) return false;
 
     targetTeam[role] = playerId;
+    await databaseService.updateLolMatch(match);
     Logger.info(`Oyuncu eklendi`, { matchId, team, role, playerId });
     return true;
   }
 
-  removePlayerFromLolMatch(matchId: string, playerId: string): boolean {
-    const match = this.lolMatches.get(matchId);
+  async removePlayerFromLolMatch(matchId: string, playerId: string): Promise<boolean> {
+    const match = await this.getLolMatch(matchId);
     if (!match || match.status !== 'waiting') return false;
 
     for (const role of Object.values(LolRole)) {
       if (match.blueTeam[role] === playerId) {
         delete match.blueTeam[role];
+        await databaseService.updateLolMatch(match);
         Logger.info(`Oyuncu çıkarıldı`, { matchId, team: 'blue', role, playerId });
         return true;
       }
       if (match.redTeam[role] === playerId) {
         delete match.redTeam[role];
+        await databaseService.updateLolMatch(match);
         Logger.info(`Oyuncu çıkarıldı`, { matchId, team: 'red', role, playerId });
         return true;
       }
@@ -65,8 +61,8 @@ export class MatchService {
     return false;
   }
 
-  isLolMatchFull(matchId: string): boolean {
-    const match = this.lolMatches.get(matchId);
+  async isLolMatchFull(matchId: string): Promise<boolean> {
+    const match = await this.getLolMatch(matchId);
     if (!match) return false;
 
     const blueCount = Object.keys(match.blueTeam).length;
@@ -74,46 +70,41 @@ export class MatchService {
     return blueCount === 5 && redCount === 5;
   }
 
-  startLolMatch(matchId: string): boolean {
-    const match = this.lolMatches.get(matchId);
-    if (!match || !this.isLolMatchFull(matchId)) return false;
+  async startLolMatch(matchId: string): Promise<boolean> {
+    const match = await this.getLolMatch(matchId);
+    const isFull = await this.isLolMatchFull(matchId);
+    if (!match || !isFull) return false;
 
     match.status = 'active';
-    
-    if (botStatusService.isLiveMode()) {
-      databaseService.updateLolMatch(match); // Sadece live modda Firebase'e güncelle
-    }
-    
+    await databaseService.updateLolMatch(match);
     Logger.success(`LoL maçı başladı ${botStatusService.isDevMode() ? '(TEST MODU)' : ''}`, { matchId });
     return true;
   }
 
-  completeLolMatch(matchId: string, winner: Team): boolean {
-    const match = this.lolMatches.get(matchId);
+  async completeLolMatch(matchId: string, winner: Team): Promise<boolean> {
+    const match = await this.getLolMatch(matchId);
     if (!match || match.status !== 'active') return false;
 
     match.status = 'completed';
     match.winner = winner;
-    
-    if (botStatusService.isLiveMode()) {
-      databaseService.updateLolMatch(match); // Sadece live modda Firebase'e güncelle
-    }
-    
+    match.completedAt = new Date();
+    await databaseService.updateLolMatch(match);
     Logger.success(`LoL maçı tamamlandı ${botStatusService.isDevMode() ? '(TEST MODU)' : ''}`, { matchId, winner });
     return true;
   }
 
-  deleteLolMatch(matchId: string): boolean {
-    const deleted = this.lolMatches.delete(matchId);
-    if (deleted) {
-      databaseService.deleteLolMatch(matchId); // Firebase'den sil
+  async deleteLolMatch(matchId: string): Promise<boolean> {
+    const match = await this.getLolMatch(matchId);
+    if (match) {
+      await databaseService.deleteLolMatch(matchId);
       Logger.info(`LoL maçı silindi`, { matchId });
+      return true;
     }
-    return deleted;
+    return false;
   }
 
   // TFT Methods
-  createTftMatch(mode: TftMode, createdBy: string, channelId: string): TftMatch {
+  async createTftMatch(mode: TftMode, createdBy: string, channelId: string): Promise<TftMatch> {
     const match: TftMatch = {
       id: botStatusService.isDevMode() ? botStatusService.generateTestId() : Date.now().toString(),
       mode,
@@ -134,25 +125,19 @@ export class MatchService {
       };
     }
     
-    this.tftMatches.set(match.id, match);
-    
-    if (botStatusService.isLiveMode()) {
-      databaseService.saveTftMatch(match); // Sadece live modda Firebase'e kaydet
-    }
-    
+    await databaseService.saveTftMatch(match);
     Logger.success(`TFT ${mode} maçı oluşturuldu ${botStatusService.isDevMode() ? '(TEST MODU)' : ''}`, { id: match.id, createdBy });
     return match;
   }
 
-  getTftMatch(id: string): TftMatch | undefined {
-    return this.tftMatches.get(id);
+  async getTftMatch(id: string): Promise<TftMatch | null> {
+    return await databaseService.getTftMatch(id);
   }
 
-  addPlayerToTftMatch(matchId: string, playerId: string, isReserve: boolean = false): boolean {
-    const match = this.tftMatches.get(matchId);
+  async addPlayerToTftMatch(matchId: string, playerId: string, isReserve: boolean = false): Promise<boolean> {
+    const match = await this.getTftMatch(matchId);
     if (!match || match.status !== 'waiting') return false;
 
-    // Zaten oyunda mı?
     if (match.players.includes(playerId) || match.reserves.includes(playerId)) return false;
 
     if (isReserve) {
@@ -163,16 +148,18 @@ export class MatchService {
       match.players.push(playerId);
       Logger.info(`Oyuncu eklendi`, { matchId, playerId });
     }
+    await databaseService.updateTftMatch(match);
     return true;
   }
 
-  removePlayerFromTftMatch(matchId: string, playerId: string): boolean {
-    const match = this.tftMatches.get(matchId);
+  async removePlayerFromTftMatch(matchId: string, playerId: string): Promise<boolean> {
+    const match = await this.getTftMatch(matchId);
     if (!match || match.status !== 'waiting') return false;
 
     const playerIndex = match.players.indexOf(playerId);
     if (playerIndex > -1) {
       match.players.splice(playerIndex, 1);
+      await databaseService.updateTftMatch(match);
       Logger.info(`Oyuncu çıkarıldı`, { matchId, playerId });
       return true;
     }
@@ -180,6 +167,7 @@ export class MatchService {
     const reserveIndex = match.reserves.indexOf(playerId);
     if (reserveIndex > -1) {
       match.reserves.splice(reserveIndex, 1);
+      await databaseService.updateTftMatch(match);
       Logger.info(`Yedek oyuncu çıkarıldı`, { matchId, playerId });
       return true;
     }
@@ -187,39 +175,42 @@ export class MatchService {
     return false;
   }
 
-  isTftMatchFull(matchId: string): boolean {
-    const match = this.tftMatches.get(matchId);
+  async isTftMatchFull(matchId: string): Promise<boolean> {
+    const match = await this.getTftMatch(matchId);
     return match ? match.players.length === 8 : false;
   }
 
-  startTftMatch(matchId: string): boolean {
-    const match = this.tftMatches.get(matchId);
-    if (!match || !this.isTftMatchFull(matchId)) return false;
+  async startTftMatch(matchId: string): Promise<boolean> {
+    const match = await this.getTftMatch(matchId);
+    const isFull = await this.isTftMatchFull(matchId);
+    if (!match || !isFull) return false;
 
     match.status = 'active';
-    databaseService.updateTftMatch(match); // Firebase'e güncelle
+    await databaseService.updateTftMatch(match);
     Logger.success(`TFT maçı başladı`, { matchId });
     return true;
   }
 
-  completeTftMatch(matchId: string, rankings: string[]): boolean {
-    const match = this.tftMatches.get(matchId);
+  async completeTftMatch(matchId: string, rankings: string[]): Promise<boolean> {
+    const match = await this.getTftMatch(matchId);
     if (!match || match.status !== 'active') return false;
 
     match.status = 'completed';
     match.rankings = rankings;
-    databaseService.updateTftMatch(match); // Firebase'e güncelle
+    match.completedAt = new Date();
+    await databaseService.updateTftMatch(match);
     Logger.success(`TFT maçı tamamlandı`, { matchId, rankings });
     return true;
   }
 
-  deleteTftMatch(matchId: string): boolean {
-    const deleted = this.tftMatches.delete(matchId);
-    if (deleted) {
-      databaseService.deleteTftMatch(matchId); // Firebase'den sil
+  async deleteTftMatch(matchId: string): Promise<boolean> {
+    const match = await this.getTftMatch(matchId);
+    if (match) {
+      await databaseService.deleteTftMatch(matchId);
       Logger.info(`TFT maçı silindi`, { matchId });
+      return true;
     }
-    return deleted;
+    return false;
   }
 
   getTftPointsForRank(rank: number): number {

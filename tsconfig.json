@@ -13,7 +13,7 @@
     "noImplicitAny": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "suppressImplicitAnyIndexErrors": true
+    
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

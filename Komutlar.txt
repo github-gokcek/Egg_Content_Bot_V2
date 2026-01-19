@@ -1,0 +1,185 @@
+/kayıt [game][nick(in game nick(ign))][rol][rank]    Oyuncuyu X oyunu için sisteme kaydeder. Eğer oyun LoL ise role ve rank bilgileri girilmelidir. Ancak TFT ise role bilgisine ihtiyaç yoktur ve komut "/kayıt [game][ign][rank]" şeklinde de kullanılabilir.
+/profil                     Oyuncunun profilini gösterir. Profilde oyuncunun profil fotoğrafı, lol win rate'i, tft ilk 4'e girme değeri, mvp sayısı, oynadığı maç sayısı ( tft ve lol için ayrı) gösterilir.
+/profil [@Ahmet]            Discorddaki @Ahmet kullanıcının profilini gösterir.
+/rank                       kişinin kendi derecesini gösterir. ( leaderboard'daki derecesi)
+/rank [@Mehmet]             Discorddaki @Mehmet kullanıcının derecesini gösterir.
+/report [@X][sebep][kanit]  Anonim olarak şikayette bulunun. Açılan her şikayet için sadece adminlere ve o reportu atan kullanıcıya gözüken bir yazı kanalı oluşturulur. Kanit kısmı için olan yere bir yazı, internet linki gibi şeyler yazılabilir. Admin sorunu çözdükten sonra "/report_sonuçlandır" ile kanalı kapatabilir. 
+/rol_sec                    Rank, roller ve maç bilgi rolü seç. (adminin bir kere chate yazıp, Sonrasında insanların botun attığı mesaj üzerinden yetkilerini aldıkları sistem. ( sadece admin kullabilir.)). Şimdilik sadece "TFT , LoL" , "LoL Bildirim" , "TFT bildirim " yetkilerini almak için konulmuş 4 buton kâfi olacaktır. LoL ve TFT yetkileri sadece görsel olarak duran şeyler olacak. LoL ve TFT bildirim yetkileri ise, insanlar sadece o oyun hakkında bildirim almaya "okay" iseler alacakları yetkiler olacak.
+/sıralama                   LoL liderlik tablosunu göster.
+/uyarikaldir [@Ahmet]       @Ahmet kişisinin üstündeki "uyarı" permini kaldır. ( Admin kullabilir.)
+/uyariver [@Ahmet]          @Ahmet kişisine "uyarı" permi ver. ( Admin kullabilir.) ( Uyarı almak kötü bir şeydir.)
+/yardim                     Tüm komutları gösterir.
+/admin reset leaderboard    Sunucudaki tüm galibiyet, mağlubiyet, MMR ve MVP oylarını sıfırlayın.
+/admin mac bildirim [game][saat][draft_türü][isteğe bağlı mesaj]    "X Bildirim" bilgi rolüne ( permine ) sahip olanlara DM'den maç bildirimi gönder.
+/admin reset user [@Ahmet]  @Ahmet kişinin Galibiyet, mağlubiyet, MMR ve MVP oylarını sıfırlayın.
+/admin reset_db [user_id]    @Ahmet kişinin sıralama tablosundaki kayıtlarını kaldırın.
+/admin update_ign [ign][@Ahmet][game] @Ahmet'in X oyunu için olan, oyun içi ismini değiştirir.
+/admin_top_on               Sabit bir kanalda kalıcı olarak liderlik tablosu oluşturun.
+/setmvp [game-id][@ahmet]    Bir oyuncu o oyunun mvp'si olarak seçilir. Her oyun kazanmak o oyuncuya 20 LP ( lig puanı kazandırır.) ( MVP olmak kazansada kaybetsede hanesine ekstra 10 puan daha yazdırır.) Oyuncunun kaç defa mvp olduğu da istatistiklerde görüntülenir. leaderboard LP değerine göre sıralanır.
+/admin çoklu_katılma [evet/hayır] Bu komutun hali hazırda evet mi hayır olmasına göre insanlar hali hazırda bir oyuna katılmak için kayıt olmuşlar ise başka bir oyuna daha girebilecekler veya giremeyecekler. Defauel olarak true(evet) olacak.
+
+
+Oyun kurma sistemleri :
+Peki insanlar bir oyun oluşturmak istediklerinde ne yapacaklar ?
+Kurulmuş her bir oyun unique bir id tanımlanacak.
+Kurulmuş bütün oyunlar discorddaki "Aktif Oyunlar" diye bir kanala gidecek.
+Kurulan oyuna dair bot bir mesaj atacak.
+Lobi sürekli açık kalan bir mantık olarak düşünelecek.
+Eğer 10 kişi de butonlara tıklar ise ve her takımın ilgili rolüne birine atanır ise oyun otomatik olarak başlayacak. ( tabiki, birisinin "gerçek" oyunu açıp orada bir oda kurması gerekiyor. Onu birisinin yaptığını varsayıyoruz. Biz sadece organize ediyoruz.)
+Sonrasında bot otomatik olarak 2 tane oda açacak ( kırmızı takım için bir tane mavi takım için bir tane ). Odanın ismi Kırmızı[maç_id] ve Mavi[maç_id] olacak.
+Bu oda tek seferlik bir oda olacak. Bir kere kurulduktan sonra, o odadaki herkes sesten çıkarsa, kendini kapatacak.
+Tabiki kurulduğu anda sıfır kişi olacağı için direk kapanır. Bunun yaşanmaması için öncesinde, o an o sunucuda herhangi bir ses kanalında olan ve o oyuna katılmak için butona basmış herkesi otomatik olarak açılmış ses odalarına takımlarına koyacak şekilde yerleştirecek. Sonrasında eğer bu odanın mevcudu 0'a düşerse o oda kapanacak.
+Bu sırada botun mesajında değişime gidilecek. Maç artık başladı ve oynanıyor. Oyuncular odalarında ve dışardan oyuncular o kanala giriş yapamıyor. Bot o oyun için atılmış ve insanların takımlarına butonlara basarak yerleşebildiği mesajı silecek ve yeni bir mesaj atacak. Mesajda X id'li maç başladı. Oyuncular şunlar. Hemen izleyin. sonrasında bu mesajın altında 2 buton olacak. Kırmızı takımı izle ve mavi takımı izle butonları. Bu butona basan bir kullanıcı o oyunun oynandığı odaya giriş hakkı kazanacak. Ancak o odaya girince mikrafonu susturulmuş girecek ve geri açamayacak.
+Eğer bu bir LoL Oyunu ise, Botun attığı mesajda;
+    Oyun id'si,
+    Mavi takımın , kırmızı takımın ve yedek oyuncuların anlık oyuncularının kimler olduğunu gösteren anlık güncellenen bir önizleme olacak,
+    Bu mesajın altında 5 tane kırmızı buton olacak. Bu butonlar "Top", "Jungle","Mid","Adc","Support" butonları olacak ( LoL 10 kişinin beşerli 2 takıma bölünme ile oynanır. Her takımda top jungle mid support ve adc olarak 5 rol/koridor bulunur. her bir oyuncu bu rolleden birine atanır.).  Kırmızı takımın ilgili koridoruna atanmak isteyen oyuncu ilgili butona basar.
+    Bu 5 butonun aynısı mavi takım içinde olacak.
+    Bir tane "Yedek oyuncu" butonu olacak. Bu buton ile yedek oyuncu olarak girilebilecek.
+    "Oyundan Çık" butonu olacak. Bu buton ile oyundan çekilebilinecek. Butona basıldıktan sonra kullanıcının ismi discordun attığı mesajdan kaldırılacak.
+    Bir takımın ilgili takımının, ilgili rolü dolu ise ve birisi yine de o role girmek için butona basılır ise izin verilmeyecek. 
+
+Oyunlar,
+/oyun_kur [game][oyun_modu] ile olacak. game yerine LoL Ve TFT gelebiliyor ( TFT için ne olduğunu sonra anlatacağım.). Oyun modu için LoL için ("sihirdar" ve "aram") seçenekleri var. Oyun modu LoL ve sihirdar ise geçerli bu konuştuklarımız. Oyun modu aram ise, yine 2 ayrı takım geçerli ancak bu sefer koridor seçmiyoruz. "Kırmızı Takım" ve "Mavi Takım" olarak 2 buton oluyor ve insanlar ona göre giriyor. Aram maçlarının kaydını şimdilik tutmayacağız. Eğer tft ise dediğim gibi onu sonra anlatacağım. Oda Solo ve double olarak 2'ye ayrılıyor.
+/oyun_iptal [game-id] başlatılmış bir maçı iptal eder. Bu komutu adminler veya o maçı en başta açan kişi kullanabilir. ( Eğer bu dediğimi yapmak zor ise, Maçı herkes açabilir ancak sadece adminler silebilir şeklinde de yapabilirsin ancak tercihen ilk dediğim gibi olmalı)
+
+Bir maç bittikten sonra, maç sonuçlarını girmek gerek. Bunun için şu komutlar olacak.
+Her
+/oyun_win [game-id][mavi veya kırmızı]  | kazanan takımın rengi yazılarak kazanan söylenecek. O oyunda hangi oyuncu hangi takımda belli olduğundan sistem otomatik atayacak.
+
+Şuan sadece kimin win aldığını girdik. İlerde bir react dashboard ile daha detaylı bir win girme sistemi yapacağız. Hem win alanı yazacağız. Hem de her bir o oyuncunun o oyunda hangi şampiyonla oynadığı  ve skorunun ne olduğu gibi şeyleri de yapacağız ancak bunlar ileride. Şuan kazananı tutmak kâfi.
+
+/set game channel [#kanal-adı][game]  Bir kanalı, bu kanalda kurulmuş oyunların mesajı gösterilsin diye atamak için yazılan komut.
+/disable channel [#kanal-adı]  Daha önceden atanan bir kanalı devre dışı bırakmak için yazılan komut.
+/set winnerlog channel [#kanal-adı][game] Oyun sonuçlarının gösterilmesi kanalı ata.
+/disable winnerlog [#kanal-adı] Daha önceden atanan sonuç kanalı devre dışı bırakmak için yazılan komut.
+
+/admin iptal [@Ahmet]  @Ahmet kişisinin mevcut kurulmuş oyunu iptal et.
+/admin kazananı_değiştir [game-id][kazanan takımın rengi]  bitmiş bir oyunun kazanan takımını değiştir.
+/admin reset queue [game-id]   bir oyuna dair herhangi bir takımın herhangi bir koridoruna atanmış herkesi çıkart. ( insanların tekrar butonlara basıp takımlara girmesi gerekecek.)
+/admin sıradansil [game-id][@Ahmet]   Ahmet kullanıcısını id'si verilen oyun için atandığı atandığı rolden çıkart. ( yukardaki komutun aynısı sadece herkes değilde bir kişi için.)
+/admin yetki ver [role][@ahmet]   ahmet kullanısına "admin" rolü ver. ( bu yetki admin ile başlayan tüm komutları yapabilir.)
+
+TFT Oyun Sistemi : TFT 8 kişiden oynanan bir oyundur. Kazanan bir takım değil kazanan bir kişi vardır. ( teknik olarak ilk 4'e girenler kazanmış son 4'e girenler kaybetmiş sayılır. ancak teknik olarak 1. olan 4. olandan daha fazla puan alır. 5. olan 8. olana göre daha az puan kaybeder.)
+/oyun_kur [game][oyun-modu]  bir tft oyunu kurar. Solo ise tek kişilik oyun, double ise 2 kişilik takım oyunu kurar.
+
+Bir tft oyunu kurulduğunda botun attığı mesajda,
+LoL'deki olanlardan farklı olarak bir takım mantığı  yoktur. Herkes bir havuzda toplanır.
+Yine unique bir tanımlanır.
+Oyuna katıl butonu olur. Bu butona basan oyuncular oyuna katılır. Aynı şekilde yedek olarak katıl butonu da olur.
+Oyuna katılan oyuncuların isimleri botun attığı mesajda anlık olarak güncellenir.
+Oyuna katılan oyuncular 8 kişi olduğunda oyun otomatik olarak başlar.
+Oyunun başlamasıyla birlikte bot yeni bir mesaj atar. Bu mesajda oyunun başladığını ve oyuncuların kimler olduğunu gösterir.
+Oyunu izlemek için bir buton olur. Bu butona basan oyuncular oyunun oynandığı ses kanalına mikrafonsuz olarak girer.
+
+Oyunun bitimi sonrasında kazananların girimi şu şekilde olur.
+/oyun_win [game-id][@Ahmet][@Mehmet][@Ayşe][@Fatma]... ( 8 oyuncunun da adı girilir.)  kazanan oyuncuların discord isimleri yazılarak kazananlar girilir. İlk girilen kişi 1. olur. Örneğin yukarıdaki komutta Ahmet 1. olur, Mehmet 2. olur, Ayşe 3. olur, Fatma 4. olur.
+LoL istatistikleri win rate olarak tutulurken, tft istatikleri ilk 4'e girme oranı olarak tutulur. Ve ayrıca bu istatistikler arasında o kişinin tüm sıralamaları " Oynadığı oyunlar / maç geçmişi : 1 , 3,7, 4, 5, 1,  ... gibi uzun bir yazı halinde bu güne kadar oynadığı oyunda 1. olmuş 3. olmuş gibisinden görülebilir.
+Birinci olan 5 puan kazanırken 2. olan 3 puan, 3. olan 2, 4. olan 1, 5. olan -1, 6. olan -2, 7. olan -3 puan, 8. olan -5 puan.
+bu yazılanlar solo oyun modu içindi.
+
+Double modunda ikişerli 4 takım bulunur. Burada yeni bir sistem istiyorum. insanlar ses odasında konuşup ikişerli olarak gruplaşacaklar.
+Bir kullanıcı  "/grup [grup ismi]" yazarak grup oluşturabilecekler. Sonrasında /grup invite [@ahmet] komutu ile başkasını gruba davet edebilecek. Grup olan insanlar bot tarafından bir gibi değerlendirilecekler. Bu grup sistemi LoL içinde kullanılabilecek.
+Eğer 2 kişi grup kurarsa, o grubun bir üyesi herhangi bir oyuna katılmak için butona bastığında otomatik olarak ikisinin de adı o oyuna eklenecek.
+Gruplar "/grup çık" komutu kullanılıp grup dağıtılmadığı sürece kalıcı olarak sürecek. "/grup_çık" komutu yazan kullanıcıyı mevcut grubundan çıkartacak. Gruplar 5 kişiye kadar çıkabilecek. Lol oyununun sihirdar vadisi modunda kullanıcıların ayrıca koridor seçme yükümlülükleri de olduğundan orada çalışmayacak. Bir gruba mensup birisi gruptayken bir lol oyununa girmeye çalışır ise, sistem ona sadece ona gözükecek bir şekilde " önce gruptan çıkınız " şeklinde bir uyarı yapacak.
+Grup sistemi sadece lol aram modunda ve TFT double up modunda çalışacak. Diğer modlar için önce gruptan çıkın mesajı geçilecek.
+TFT double oyun modu ise zorunlu olarak bir grup olarak giriş yapılmasını bekleyecek. 4 takım için buton olarak. "1. takım" , "2.takım" şeklinde butonlar olacak. 2'li grup oluşturmuş insanlar o oyuna oluşturdukları gruplar ile girecekler. Grup halinde giribilen oyun modlarında insanların yanında grup isimleri gözükecek.
+
+TFT double up modunun oyun sonucu şu şekilde girilecek :
+/oyun_win [game-id][@grup-ismi1][@grup-ismi2][@grup-ismi3][@grup-ismi4]  | 4 grup ismi girilir. İlk girilen grup 1. olur. Örneğin yukarıdaki komutta grup-ismi1 1. olur, grup-ismi2 2. olur, grup-ismi3 3. olur, grup-ismi4 4. olur.
+1. olan takım 3 puan kazanırken, 2. takım 1 puan, 3. takım -1 puan,4. takım -3 puan kazanacak.
+İstatistikler o grup üzerine kaydedilir. Yani oluşturulan gruplar için unique bir id oluşturulur.
+Ahmet ve mehmet bir grup oluşturup bir double up oyunu oynarlarsa ve sonrasında grubu bozup tekrar grup olurlarsa, o grup unique bir grup olmayacağından o gruba unique bir id oluşturulmaz. Mevcut grup istatistiklerinden devam edilir.
+Ancak ahmet ve ayşe ilk defa grup oluşturmuş işte, daha önce ahmet ve ayşe ikilisinin olduğu bir grup yoksa onun için unique bir id oluşturulur. Grupların ismi her seferinde başka bir isim ile kurulabilir ancak grup kapatıldığı anda bu ismin bir önemi kalmaz. isimler grup kapatıldığı anda silinir ve yeni isimler ile oluşturulabilir. Ancak id-ler değişmez.
+Bir oyuncu başka bir oyuncuya grup için invite atar ise, o oyuncuya DM gider. Bot DM'de o oyuncuya X kişisinden grup daveti aldın kabul ediyor musun diye sorar.
+
+Oyunlar ;
+LoL-Oyun-sonuç
+TFT-Oyun-Sonuç gibi kanallarda, oyunlar /oyun_win komutu sonuçlandırıldıkları anda bot tarafından paylaşılırlar. ( /oyun_win komutunu dediğim gibi sadece o oyunu kuran kişi yine kendi kurduğu o oyun için veya adminler kullanabilir.)
+(Bu odaların ismi farklı olabilir. Öncesinde adminler o kanalları /set X channel komutları ile atamaları gerek.)
+
+Not : Komutlardaki [ ] işaretleri komutun parçası değildir. Sadece oraya ne yazılacağına dair bilgi vermek içindir.
+Botun bir butonuna basılarak yapılan tüm işlemlerde kullanıcıya, sadece ona gözükecek şekilde olumlu veya olumsuz bir geri bildirim verilir.
+Botun kurulmuş oyunları gösterdiği kanallar, leaderboard'u gösterdiği kanallar, oyun sonuçlarını paylaştığı kanallar etc. bunun gibi botun aktif mesaj, sonuç veya istatik paylaştığı kanallar "/set X channel " komutları ile atanıp silebilmeli. ( üstte çoğusunu tanımladık zaten sanırım.)
+Botun yaptığı tüm işlemler, negatif veya pozitif loglanacak. Clean ve düzgün bir loglama olacak. ileride biz logları console'da görmek yerine dashboard'a taşıyacağız. Ancak şimdilik console logları yeterli olacaktır.
+
+Firebase için gerekli bilgiler :
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyC4zqJc-Jb5uSNbAfUjr9hGaZPD_C_u2os",
+  authDomain: "egg-content-bot-v2.firebaseapp.com",
+  projectId: "egg-content-bot-v2",
+  storageBucket: "egg-content-bot-v2.firebasestorage.app",
+  messagingSenderId: "252254221237",
+  appId: "1:252254221237:web:b477255ea5a292754b1ffc",
+  measurementId: "G-X5JJYJ3294"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------
+-Bakiye modeli eklenecek,
+	muhtemel içerikler {
+    
+}
+

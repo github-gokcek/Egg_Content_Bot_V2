@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: egg-content-bot
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        value: 1461056941567770684

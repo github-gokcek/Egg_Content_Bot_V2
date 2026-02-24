@@ -148,6 +148,42 @@ module.exports = {
 
     // Buttons
     if (interaction.isButton()) {
+      // Rol seçim butonları
+      if (interaction.customId.startsWith('role_')) {
+        const roleId = interaction.customId.replace('role_', '');
+        
+        if (!interaction.guild || !interaction.member) {
+          return interaction.reply({ content: '❌ Bu komut sadece sunucularda kullanılabilir!', ephemeral: true });
+        }
+
+        try {
+          const member = interaction.member as any;
+          const hasRole = member.roles.cache.has(roleId);
+
+          if (hasRole) {
+            await member.roles.remove(roleId);
+            const role = await interaction.guild.roles.fetch(roleId);
+            return interaction.reply({ 
+              content: `✅ **${role?.name}** rolü çıkarıldı!`, 
+              ephemeral: true 
+            });
+          } else {
+            await member.roles.add(roleId);
+            const role = await interaction.guild.roles.fetch(roleId);
+            return interaction.reply({ 
+              content: `✅ **${role?.name}** rolü verildi!`, 
+              ephemeral: true 
+            });
+          }
+        } catch (error) {
+          Logger.error('Rol verilemedi', error);
+          return interaction.reply({ 
+            content: '❌ Rol verilirken hata oluştu! Botun rol yetkisi olduğundan emin olun.', 
+            ephemeral: true 
+          });
+        }
+      }
+
       // Düello davet butonları
       if (interaction.customId.startsWith('duel_accept_') || interaction.customId.startsWith('duel_decline_')) {
         const duelId = interaction.customId.replace('duel_accept_', '').replace('duel_decline_', '');

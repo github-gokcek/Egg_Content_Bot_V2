@@ -5,6 +5,7 @@ import { join } from 'path';
 import 'dotenv/config';
 import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
+import { patchNotesService } from './services/patchNotesService';
 
 const client = new Client({ intents: config.intents });
 
@@ -37,5 +38,10 @@ for (const file of eventFiles) {
 
 // Start voice activity tracking
 voiceActivityService.start();
+
+// Start patch notes checking when bot is ready
+client.once('ready', (client) => {
+  patchNotesService.startChecking(client);
+});
 
 client.login(config.token);

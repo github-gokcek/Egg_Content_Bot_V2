@@ -10,6 +10,25 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction: Interaction) {
+    // Context Menu Commands (mesaja sağ tık)
+    if (interaction.isMessageContextMenuCommand()) {
+      const command = (interaction.client as any).commands.get(interaction.commandName);
+      if (!command) return;
+
+      try {
+        await command.execute(interaction);
+      } catch (error) {
+        Logger.error('Context menu komut hatası', error);
+        const reply = { content: 'Komut çalıştırılırken hata oluştu!', ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(reply);
+        } else {
+          await interaction.reply(reply);
+        }
+      }
+      return;
+    }
+
     // Slash Commands
     if (interaction.isChatInputCommand()) {
       const command = (interaction.client as any).commands.get(interaction.commandName);

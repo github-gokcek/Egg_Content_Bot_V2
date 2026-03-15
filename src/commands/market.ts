@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { databaseService } from '../services/databaseService';
 import { inventoryService, MARKET_ITEMS } from '../services/inventoryService';
+import { Player } from '../types';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -26,17 +27,32 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === 'list') {
-      const player = await databaseService.getPlayer(interaction.user.id);
-      const balance = player?.balance ?? 100;
+      let player = await databaseService.getPlayer(interaction.user.id);
+      
+      if (!player) {
+        // Oyuncu yoksa otomatik oluştur
+        player = {
+          discordId: interaction.user.id,
+          username: interaction.user.username,
+          balance: 0,
+          createdAt: new Date(),
+          stats: {
+            lol: { wins: 0, losses: 0 },
+            tft: { matches: 0, top4: 0, rankings: [], points: 0 }
+          }
+        };
+        await databaseService.savePlayer(player);
+      }
+      const balance = player.balance;
       
       const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('🛒 Market - Eşya Mağazası')
-        .setDescription(`💳 **Bakiyeniz:** ${balance} 🪙\n\n🛍️ **Mevcut Ürünler:**`)
+        .setDescription(`💳 **Bakiyeniz:** ${player.balance} 🪙\n\n🛍️ **Mevcut Ürünler:**`)
         .addFields(
           MARKET_ITEMS.map(item => ({
             name: `${item.emoji} ${item.name}`,
-            value: `📝 ${item.description}\n💰 **Fiyat:** ${item.price} 🪙\n📊 **Durum:** ${balance >= item.price ? '✅ Satın Alabilirsiniz' : '❌ Yetersiz Bakiye'}`,
+            value: `📝 ${item.description}\n💰 **Fiyat:** ${item.price} 🪙\n📊 **Durum:** ${player.balance >= item.price ? '✅ Satın Alabilirsiniz' : '❌ Yetersiz Bakiye'}`,
             inline: true
           }))
         )
@@ -48,13 +64,21 @@ module.exports = {
 
     else if (subcommand === 'buy') {
       const itemId = interaction.options.getString('item', true);
-      const player = await databaseService.getPlayer(interaction.user.id);
+      let player = await databaseService.getPlayer(interaction.user.id);
 
       if (!player) {
-        return interaction.reply({
-          content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-          ephemeral: true
-        });
+        // Oyuncu yoksa otomatik oluştur
+        player = {
+          discordId: interaction.user.id,
+          username: interaction.user.username,
+          balance: 0,
+          createdAt: new Date(),
+          stats: {
+            lol: { wins: 0, losses: 0 },
+            tft: { matches: 0, top4: 0, rankings: [], points: 0 }
+          }
+        };
+        await databaseService.savePlayer(player);
       }
 
       const item = MARKET_ITEMS.find(i => i.id === itemId);

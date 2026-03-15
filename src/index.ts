@@ -6,7 +6,7 @@ import 'dotenv/config';
 import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
 import { patchNotesService } from './services/patchNotesService';
-import { checkReminders } from './commands/hatirlat';
+const { checkReminders } = require('./commands/hatirlat');
 
 const client = new Client({ 
   intents: config.intents,
@@ -52,8 +52,8 @@ client.once('ready', (client) => {
   patchNotesService.startChecking(client);
   
   // Hatırlatıcı kontrolü (her dakika)
-  setInterval(() => {
-    checkReminders(client);
+  setInterval(async () => {
+    await checkReminders(client);
   }, 60 * 1000);
   
   Logger.info('Hatırlatıcı sistemi başlatıldı');

@@ -51,6 +51,7 @@ export async function checkReminders(client: any) {
 }
 
 module.exports = {
+  checkReminders,
   data: new SlashCommandBuilder()
     .setName('hatırlat')
     .setDescription('Belirli bir süre sonra hatırlatıcı ayarla')

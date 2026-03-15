@@ -7,6 +7,7 @@ import { Logger } from '../utils/logger';
 import { db } from '../services/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { handleBlackjackButtons, handleCrashCashout, handleMinesButtons } from '../services/casinoHandlers';
+import { handleDuelloButton } from '../commands/duello';
 
 module.exports = {
   name: Events.InteractionCreate,
@@ -176,6 +177,11 @@ module.exports = {
 
     // Buttons
     if (interaction.isButton()) {
+      // Duello buttons
+      if (interaction.customId.startsWith('duello_')) {
+        return handleDuelloButton(interaction);
+      }
+      
       // Casino game buttons
       if (interaction.customId.startsWith('blackjack_')) {
         return handleBlackjackButtons(interaction);

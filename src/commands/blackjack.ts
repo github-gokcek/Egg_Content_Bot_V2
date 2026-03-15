@@ -81,6 +81,10 @@ module.exports = {
       });
     }
 
+    // Bahsi çıkar
+    player.balance -= amount;
+    await databaseService.updatePlayer(player);
+
     // Oyun başlat
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
@@ -104,7 +108,8 @@ module.exports = {
     if (playerValue === 21) {
       await deleteDoc(doc(db, 'blackjackGames', interaction.user.id));
       
-      const winAmount = Math.floor(amount * 1.5);
+      // Blackjack: 2.5x ödeme (bahis + 1.5x kazanç)
+      const winAmount = Math.floor(amount * 2.5);
       player.balance += winAmount;
       await databaseService.updatePlayer(player);
 
@@ -114,7 +119,7 @@ module.exports = {
         .addFields(
           { name: '🎴 Senin Elin', value: `${formatHand(playerHand)}\n**Değer: ${playerValue}**`, inline: true },
           { name: '🎴 Krupiye', value: `${formatHand(dealerHand)}\n**Değer: ${dealerValue}**`, inline: true },
-          { name: '💰 Kazanç', value: `+${winAmount} 🪙 (1.5x)`, inline: false },
+          { name: '💰 Kazanç', value: `+${winAmount - amount} 🪙 (1.5x)`, inline: false },
           { name: '💳 Yeni Bakiye', value: `${player.balance} 🪙`, inline: false }
         )
         .setTimestamp();

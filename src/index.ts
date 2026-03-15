@@ -5,6 +5,7 @@ import { join } from 'path';
 import 'dotenv/config';
 import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
+import { voiceCoinService } from './services/voiceCoinService';
 import { patchNotesService } from './services/patchNotesService';
 const { checkReminders } = require('./commands/hatirlat');
 
@@ -46,6 +47,9 @@ for (const file of eventFiles) {
 
 // Start voice activity tracking
 voiceActivityService.start();
+
+// Start voice coin tracking
+voiceCoinService.start();
 
 // Start patch notes checking when bot is ready
 client.once('ready', (client) => {

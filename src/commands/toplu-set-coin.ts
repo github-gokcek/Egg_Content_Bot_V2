@@ -5,30 +5,20 @@ import { Player } from '../types';
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('toplu')
-    .setDescription('Sunucudaki tüm üyelere coin ekle veya çıkar')
+    .setName('toplu-set-coin')
+    .setDescription('Sunucudaki tüm üyelerin parasını belirtilen değere ayarla')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addStringOption(opt =>
-      opt.setName('mode')
-        .setDescription('İşlem türü')
-        .setRequired(true)
-        .addChoices(
-          { name: '➕ Ekle', value: 'add' },
-          { name: '➖ Çıkar', value: 'remove' }
-        )
-    )
     .addIntegerOption(opt =>
       opt.setName('miktar')
-        .setDescription('Coin miktarı')
+        .setDescription('Ayarlanacak coin miktarı')
         .setRequired(true)
-        .setMinValue(1)
+        .setMinValue(0)
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply();
 
     try {
-      const mode = interaction.options.getString('mode', true) as 'add' | 'remove';
       const amount = interaction.options.getInteger('miktar', true);
       const guild = interaction.guild;
 
@@ -70,35 +60,24 @@ module.exports = {
             };
           }
 
-          // Coin işlemi
-          if (mode === 'add') {
-            player.balance += amount;
-          } else {
-            // Çıkarma modunda bakiye kontrolü
-            if (player.balance < amount) {
-              skippedCount++;
-              errors.push(`${member.user.username}: Yetersiz bakiye (${player.balance} 🪙)`);
-              continue;
-            }
-            player.balance -= amount;
-          }
+          // Parasını ayarla
+          player.balance = amount;
 
           await databaseService.updatePlayer(player);
           processedCount++;
-          Logger.success('Toplu coin işlemi', { userId: member.id, username: member.user.username, mode, amount });
+          Logger.success('Toplu set coin işlemi', { userId: member.id, username: member.user.username, amount });
         } catch (error) {
           errors.push(`${member.user.username}: ${error}`);
-          Logger.error('Toplu coin işlemi hatası', error);
+          Logger.error('Toplu set coin işlemi hatası', error);
         }
       }
 
       // Sonuç embed'i
-      const modeText = mode === 'add' ? '➕ Eklendi' : '➖ Çıkarıldı';
       const embed = new EmbedBuilder()
-        .setColor(mode === 'add' ? 0x00ff00 : 0xff0000)
-        .setTitle(`${modeText} - Toplu Coin İşlemi`)
+        .setColor(0x0099ff)
+        .setTitle('💰 Toplu Coin Ayarlama')
         .addFields(
-          { name: '💰 İşlem Miktarı', value: `${amount} 🪙`, inline: true },
+          { name: '🎯 Ayarlanan Miktar', value: `${amount} 🪙`, inline: true },
           { name: '✅ İşlenen Üye', value: `${processedCount} üye`, inline: true },
           { name: '⏭️ Atlanan Üye', value: `${skippedCount} üye`, inline: true },
           { name: '👥 Toplam İşlenen', value: `${processedCount + skippedCount} üye`, inline: true }
@@ -107,15 +86,15 @@ module.exports = {
 
       if (errors.length > 0) {
         embed.addFields({
-          name: '⚠️ Hatalar/Atlanmış',
+          name: '⚠️ Hatalar',
           value: errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n... ve ${errors.length - 10} hata daha` : '')
         });
       }
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      Logger.error('Toplu coin işlemi hatası', error);
-      await interaction.editReply('❌ Toplu coin işlemi sırasında bir hata oluştu!');
+      Logger.error('Toplu set coin işlemi hatası', error);
+      await interaction.editReply('❌ Toplu coin ayarlama işlemi sırasında bir hata oluştu!');
     }
   }
 };

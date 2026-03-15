@@ -26,7 +26,7 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
     game.playerValue = calculateValue(game.playerHand);
 
     if (game.playerValue > 21) {
-      // Bust
+      // Bust - bahis kaybedildi
       await deleteDoc(doc(db, 'blackjackGames', interaction.user.id));
 
       const embed = new EmbedBuilder()
@@ -75,16 +75,19 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
     if (game.dealerValue > 21 || game.playerValue > game.dealerValue) {
       result = '🎉 Kazandın!';
       color = 0x00ff00;
-      winAmount = game.bet * 2;
+      // Ev avantajı: Kazanıldığında 1.8x ödeme (bahis + 0.8x kazanç)
+      winAmount = Math.floor(game.bet * 1.8);
       player.balance += winAmount;
     } else if (game.playerValue === game.dealerValue) {
       result = '🤝 Berabere!';
       color = 0xffff00;
+      // Berabere: Bahis iade
       winAmount = game.bet;
       player.balance += winAmount;
     } else {
       result = '💸 Kaybettin!';
       color = 0xff0000;
+      // Kayıp: Bahis zaten çıkarılmış
     }
 
     await databaseService.updatePlayer(player);
@@ -113,11 +116,9 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
       });
     }
 
+    // İkinci bahsi çıkar
     currentPlayer.balance -= game.bet;
-    const originalBet = game.bet; // Orijinal bahsi kaydet
     game.bet *= 2;
-    game.doubled = true;
-    game.originalBet = originalBet; // Orijinal bahsi oyuna ekle
 
     // Tek kart çek
     const newCard = drawCard();
@@ -139,19 +140,23 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
     if (game.playerValue > 21) {
       result = '💥 BUST!';
       color = 0xff0000;
+      // Kayıp: Bahis zaten çıkarılmış
     } else if (game.dealerValue > 21 || game.playerValue > game.dealerValue) {
       result = '🎉 Kazandın!';
       color = 0x00ff00;
-      winAmount = game.bet * 2;
+      // Ev avantajı: Kazanıldığında 1.8x ödeme (bahis + 0.8x kazanç)
+      winAmount = Math.floor(game.bet * 1.8);
       currentPlayer.balance += winAmount;
     } else if (game.playerValue === game.dealerValue) {
       result = '🤝 Berabere!';
       color = 0xffff00;
+      // Berabere: Bahis iade
       winAmount = game.bet;
       currentPlayer.balance += winAmount;
     } else {
       result = '💸 Kaybettin!';
       color = 0xff0000;
+      // Kayıp: Bahis zaten çıkarılmış
     }
 
     await databaseService.updatePlayer(currentPlayer);
@@ -187,9 +192,33 @@ export async function handleCrashCashout(interaction: ButtonInteraction) {
   
   if (!player) return;
 
-  // Rastgele bir multiplier seç (crash point'e kadar)
-  const currentMultiplier = 1.0 + (Math.random() * (game.crashPoint - 1.0));
-  
+  // Crash oldu mu kontrol et
+  if (game.crashed) {
+    return interaction.reply({
+      content: '❌ Oyun zaten crash oldu! Kaybettiniz.',
+      ephemeral: true
+    });
+  }
+
+  // Mevcut çarpanı hesapla (başlangıçtan itibaren geçen zaman)
+  const elapsedMs = Date.now() - game.startTime;
+  const elapsedSeconds = elapsedMs / 1000;
+  const currentMultiplier = Math.min(1.0 + (elapsedSeconds * 0.01), game.crashPoint);
+
+  // Crash point'e ulaştı mı?
+  if (currentMultiplier >= game.crashPoint) {
+    await setDoc(doc(db, 'crashGames', interaction.user.id), {
+      ...game,
+      crashed: true
+    });
+
+    return interaction.reply({
+      content: '❌ Crash oldu! Kaybettiniz.',
+      ephemeral: true
+    });
+  }
+
+  // Cashout başarılı
   await deleteDoc(doc(db, 'crashGames', interaction.user.id));
 
   const winAmount = Math.floor(game.bet * currentMultiplier);
@@ -198,7 +227,7 @@ export async function handleCrashCashout(interaction: ButtonInteraction) {
 
   const embed = new EmbedBuilder()
     .setColor(0x00ff00)
-    .setTitle('💰 Cashout Başarılı!')
+    .setTitle('🎉 Cashout Başarılı!')
     .setDescription(`${currentMultiplier.toFixed(2)}x'de cashout yaptın!`)
     .addFields(
       { name: '💰 Bahis', value: `${game.bet} 🪙`, inline: true },
@@ -269,7 +298,7 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
   game.revealed[index] = true;
 
   if (game.grid[index]) {
-    // Mine hit!
+    // Mine hit! - Bahis kaybedildi
     await deleteDoc(doc(db, 'minesGames', interaction.user.id));
 
     const embed = new EmbedBuilder()
@@ -377,9 +406,23 @@ function formatHand(hand: string[], hideFirst: boolean = false): string {
 }
 
 function calculateMultiplier(safeRevealed: number, totalMines: number): number {
-  const baseMultiplier = 1.0;
-  const increment = 0.3 + (totalMines * 0.05);
-  return baseMultiplier + (safeRevealed * increment);
+  // Basit ve doğru formül
+  // Teorik: multiplier = total_tiles / remaining_safe_tiles
+  // %10 house edge: multiplier = theoretical * 0.90
+  
+  const totalTiles = 20; // 4x5 grid
+  const totalSafeTiles = totalTiles - totalMines;
+  const remainingSafeTiles = totalSafeTiles - safeRevealed;
+  
+  if (remainingSafeTiles <= 0) return 1.0;
+  
+  // Teorik multiplier
+  const theoretical = totalTiles / remainingSafeTiles;
+  
+  // %10 house edge uygula
+  const multiplier = theoretical * 0.90;
+  
+  return multiplier;
 }
 
 function createGridButtons(game: any): ActionRowBuilder<ButtonBuilder>[] {

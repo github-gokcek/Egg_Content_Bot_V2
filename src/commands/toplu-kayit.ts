@@ -43,6 +43,7 @@ module.exports = {
               discordId: member.id,
               username: member.user.username,
               balance: 0,
+              voicePackets: 0,
               createdAt: new Date(),
               stats: {
                 lol: {

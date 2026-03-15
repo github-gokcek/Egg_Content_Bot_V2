@@ -20,6 +20,7 @@ export interface UserQuests {
   quests: Quest[];
   messageCount: number;
   voiceMinutes: number;
+  voicePackets: number; // Ses paketleri (her 5 dakika = 1 paket)
   reactionsGiven: number;
   reactionsReceived: Map<string, number>; // messageId -> count
   mentionedUsers: Set<string>;
@@ -39,13 +40,13 @@ export interface UserQuests {
 const ALL_QUESTS = [
   { id: 'chat_warm', emoji: '1️⃣', name: 'Sohbet Isındı', description: '10 mesaj gönder', reward: 20, target: 10, type: 'message' },
   { id: 'chat_engine', emoji: '2️⃣', name: 'Sohbet Motoru', description: '25 mesaj gönder', reward: 40, target: 25, type: 'message' },
-  { id: 'voice_casual', emoji: '3️⃣', name: 'Ses Takılan', description: 'Ses kanalında 10 dakika kal', reward: 30, target: 10, type: 'voice' },
-  { id: 'voice_long', emoji: '4️⃣', name: 'Uzun Sohbet', description: 'Ses kanalında 30 dakika kal', reward: 60, target: 30, type: 'voice' },
+  { id: 'voice_casual', emoji: '3️⃣', name: 'Ses Takılan', description: 'Ses kanalında 2 paket (10 dakika)', reward: 30, target: 2, type: 'voice' },
+  { id: 'voice_long', emoji: '4️⃣', name: 'Uzun Sohbet', description: 'Ses kanalında 6 paket (30 dakika)', reward: 60, target: 6, type: 'voice' },
   { id: 'reaction_master', emoji: '5️⃣', name: 'Reaksiyon Ustası', description: '5 farklı mesaja reaction bırak', reward: 20, target: 5, type: 'reaction_give' },
   { id: 'popular_message', emoji: '6️⃣', name: 'Popüler Mesaj', description: 'Bir mesajın 3 reaction alsın', reward: 35, target: 3, type: 'reaction_receive' },
   { id: 'social_interaction', emoji: '7️⃣', name: 'İnsanlarla Etkileşim', description: '3 farklı kullanıcıyı mentionla', reward: 25, target: 3, type: 'mention' },
   { id: 'morning_crew', emoji: '8️⃣', name: 'Günaydın Ekibi', description: 'Bugün ilk mesajını gönder', reward: 50, target: 1, type: 'first_message' },
-  { id: 'active_listener', emoji: '9️⃣', name: 'Aktif Dinleyici', description: '10 dakika voice + 5 mesaj', reward: 45, target: 1, type: 'voice_message' },
+  { id: 'active_listener', emoji: '9️⃣', name: 'Aktif Dinleyici', description: '2 paket voice (10 dk) + 5 mesaj', reward: 45, target: 1, type: 'voice_message' },
   { id: 'emoji_lover', emoji: '🔟', name: 'Emoji Sever', description: '5 farklı emoji kullan', reward: 20, target: 5, type: 'emoji' },
   { id: 'helpful', emoji: '1️⃣1️⃣', name: 'Yardımsever', description: 'Bir mesajın 2 reply alsın', reward: 30, target: 2, type: 'reply_receive' },
   { id: 'night_owl', emoji: '1️⃣2️⃣', name: 'Gece Kuşu', description: '00:00 – 05:00 arasında mesaj gönder', reward: 40, target: 1, type: 'night_message' },
@@ -85,6 +86,7 @@ class QuestService {
       quests: randomQuests,
       messageCount: 0,
       voiceMinutes: 0,
+      voicePackets: 0,
       reactionsGiven: 0,
       reactionsReceived: new Map(),
       mentionedUsers: new Set(),
@@ -244,6 +246,8 @@ class QuestService {
     }
     
     userQuests.voiceMinutes += minutes;
+    // Her 5 dakika = 1 paket
+    userQuests.voicePackets = Math.floor(userQuests.voiceMinutes / 5);
 
     await this.updateQuestProgress(userQuests);
     userQuests.lastSaveTime = Date.now();
@@ -376,7 +380,8 @@ class QuestService {
           break;
         case 'voice_casual':
         case 'voice_long':
-          quest.progress = userQuests.voiceMinutes;
+          // Paket sayısı ile takip (1 paket = 5 dakika)
+          quest.progress = userQuests.voicePackets;
           break;
         case 'reaction_master':
           // 5 farklı mesaja reaction bırak
@@ -397,8 +402,8 @@ class QuestService {
           quest.progress = userQuests.firstMessageToday ? 1 : 0;
           break;
         case 'active_listener':
-          // 10 dakika voice + 5 mesaj
-          quest.progress = (userQuests.voiceMinutes >= 10 && userQuests.messageCount >= 5) ? 1 : 0;
+          // 2 paket voice (10 dk) + 5 mesaj
+          quest.progress = (userQuests.voicePackets >= 2 && userQuests.messageCount >= 5) ? 1 : 0;
           break;
         case 'emoji_lover':
           // 5 farklı emoji kullan

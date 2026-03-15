@@ -9,19 +9,21 @@ import { questService } from './questService';
 interface VoiceSession {
   userId: string;
   joinedAt: Date;
-  lastFPAward: Date;
+  lastPacketTime: Date; // Son paket kaydedilme zamanı
+  dailyPackets: number; // Bugün kaç paket aldığı
   dailyFPEarned: number;
 }
 
 class VoiceActivityService {
   private checkInterval: NodeJS.Timeout | null = null;
+  private readonly PACKET_DURATION = 5 * 60 * 1000; // 5 dakika
 
   start() {
     this.checkInterval = setInterval(() => {
       this.checkSessions();
-    }, 10 * 60 * 1000);
+    }, 1 * 60 * 1000); // Her 1 dakikada kontrol et
     
-    Logger.info('Voice activity tracking başlatıldı');
+    Logger.info('Voice activity tracking başlatıldı (5 dakika paket sistemi)');
   }
 
   stop() {
@@ -48,7 +50,8 @@ class VoiceActivityService {
       const session: VoiceSession = {
         userId,
         joinedAt: now,
-        lastFPAward: now,
+        lastPacketTime: now,
+        dailyPackets: 0,
         dailyFPEarned: 0,
       };
       await setDoc(doc(db, 'voiceSessions', userId), session);
@@ -76,39 +79,48 @@ class VoiceActivityService {
         const session = docSnap.data() as VoiceSession;
         const userId = session.userId;
 
-        const timeSinceLastAward = now.getTime() - new Date(session.lastFPAward).getTime();
-        const minutesSinceLastAward = timeSinceLastAward / (1000 * 60);
+        // 5 dakika paket kontrolü
+        const timeSinceLastPacket = now.getTime() - new Date(session.lastPacketTime).getTime();
+        
+        if (timeSinceLastPacket >= this.PACKET_DURATION) {
+          // Kaç paket tamamlandığını hesapla
+          const completedPackets = Math.floor(timeSinceLastPacket / this.PACKET_DURATION);
+          const newFPEarned = session.dailyFPEarned + (completedPackets * FP_RATES.VOICE_ACTIVITY_PER_10MIN);
 
-        if (minutesSinceLastAward >= 10) {
-          if (session.dailyFPEarned >= FP_RATES.VOICE_DAILY_CAP) {
+          // Günlük limite kontrol et
+          if (newFPEarned > FP_RATES.VOICE_DAILY_CAP) {
             Logger.info('Voice FP günlük limite ulaşıldı', { userId, dailyFP: session.dailyFPEarned });
             continue;
           }
 
+          // FP ver
           const success = await factionService.awardFP(
             userId, 
-            FP_RATES.VOICE_ACTIVITY_PER_10MIN, 
+            completedPackets * FP_RATES.VOICE_ACTIVITY_PER_10MIN, 
             'voice_activity',
-            { duration: '10min' }
+            { duration: `${completedPackets * 5}min`, packets: completedPackets }
           );
 
           if (success) {
             await updateDoc(doc(db, 'voiceSessions', userId), {
-              lastFPAward: now,
-              dailyFPEarned: session.dailyFPEarned + FP_RATES.VOICE_ACTIVITY_PER_10MIN,
+              lastPacketTime: now,
+              dailyPackets: session.dailyPackets + completedPackets,
+              dailyFPEarned: newFPEarned,
             });
             
-            // Quest tracking
+            // Quest tracking - paket sayısı ile
             try {
-              await questService.trackVoice(userId, 10);
+              await questService.trackVoice(userId, completedPackets * 5);
             } catch (error) {
               Logger.error('Quest voice tracking error', error);
             }
             
-            Logger.success('Voice FP verildi', { 
+            Logger.success('Voice FP paketleri verildi', { 
               userId, 
-              amount: FP_RATES.VOICE_ACTIVITY_PER_10MIN,
-              dailyTotal: session.dailyFPEarned + FP_RATES.VOICE_ACTIVITY_PER_10MIN
+              packets: completedPackets,
+              fpPerPacket: FP_RATES.VOICE_ACTIVITY_PER_10MIN,
+              totalFP: completedPackets * FP_RATES.VOICE_ACTIVITY_PER_10MIN,
+              dailyTotal: newFPEarned
             });
           }
         }
@@ -123,10 +135,11 @@ class VoiceActivityService {
       const snapshot = await getDocs(collection(db, 'voiceSessions'));
       for (const docSnap of snapshot.docs) {
         await updateDoc(doc(db, 'voiceSessions', docSnap.id), {
+          dailyPackets: 0,
           dailyFPEarned: 0,
         });
       }
-      Logger.success('Voice günlük FP sıfırlandı');
+      Logger.success('Voice günlük FP paketleri sıfırlandı');
     } catch (error) {
       Logger.error('resetDailyFP error', error);
     }

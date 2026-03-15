@@ -2,16 +2,16 @@ import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from '
 import { databaseService } from '../services/databaseService';
 
 const SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
-const WEIGHTS = [30, 25, 20, 15, 8, 2]; // Toplam 100
+const WEIGHTS = [40, 30, 15, 10, 4, 1]; // Toplam 100 - ev avantajı artırıldı (Önceki: 30, 25, 20, 15, 8, 2)
 
 // Multiplier'lar (ev avantajı için düşük tutuldu)
 const MULTIPLIERS: Record<string, number> = {
-  '🍒': 2,
-  '🍋': 3,
-  '🍊': 4,
-  '🍇': 5,
-  '💎': 10,
-  '7️⃣': 20
+  '🍒': 1.5,  // Önceki: 2
+  '🍋': 2,    // Önceki: 3
+  '🍊': 2.5,  // Önceki: 4
+  '🍇': 3,    // Önceki: 5
+  '💎': 5,    // Önceki: 10
+  '7️⃣': 10   // Önceki: 20
 };
 
 function spinSlot(): string {
@@ -56,6 +56,10 @@ module.exports = {
       });
     }
 
+    // Bahsi çıkar
+    player.balance -= amount;
+    await databaseService.updatePlayer(player);
+
     // Spin
     const slot1 = spinSlot();
     const slot2 = spinSlot();
@@ -74,14 +78,15 @@ module.exports = {
       multiplier = MULTIPLIERS[slot1];
       winAmount = amount * multiplier;
     } else if (slot1 === slot2 || slot2 === slot3 || slot1 === slot3) {
-      // 2 aynı - küçük kazanç
+      // 2 aynı - küçük kazanç (ev avantajı için düşük)
       won = true;
-      multiplier = 1.5;
+      multiplier = 1.2; // Önceki: 1.5
       winAmount = Math.floor(amount * multiplier);
     }
 
     if (won) {
-      player.balance += winAmount - amount; // Net kazanç
+      // Kazanç ver (bahis zaten çıkarıldı)
+      player.balance += winAmount;
       await databaseService.updatePlayer(player);
 
       const embed = new EmbedBuilder()
@@ -98,9 +103,7 @@ module.exports = {
 
       await interaction.reply({ embeds: [embed] });
     } else {
-      player.balance -= amount;
-      await databaseService.updatePlayer(player);
-
+      // Kaybetti (bahis zaten çıkarıldı)
       const embed = new EmbedBuilder()
         .setColor(0xff0000)
         .setTitle('💸 Slot Machine - Kaybettin!')

@@ -26,10 +26,23 @@ function generateGrid(totalMines: number = 5): boolean[] {
 }
 
 function calculateMultiplier(safeRevealed: number, totalMines: number): number {
-  // Basit multiplier hesaplama
-  const baseMultiplier = 1.0;
-  const increment = 0.3 + (totalMines * 0.05);
-  return baseMultiplier + (safeRevealed * increment);
+  // Basit ve doğru formül
+  // Teorik: multiplier = total_tiles / remaining_safe_tiles
+  // %10 house edge: multiplier = theoretical * 0.90
+  
+  const totalTiles = 20; // 4x5 grid
+  const totalSafeTiles = totalTiles - totalMines;
+  const remainingSafeTiles = totalSafeTiles - safeRevealed;
+  
+  if (remainingSafeTiles <= 0) return 1.0;
+  
+  // Teorik multiplier
+  const theoretical = totalTiles / remainingSafeTiles;
+  
+  // %10 house edge uygula
+  const multiplier = theoretical * 0.90;
+  
+  return multiplier;
 }
 
 function createGridButtons(game: MinesGame, disabled: boolean = false): ActionRowBuilder<ButtonBuilder>[] {

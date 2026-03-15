@@ -1,6 +1,7 @@
 import { Events, VoiceState, ChannelType, PermissionFlagsBits } from 'discord.js';
 import { Logger } from '../utils/logger';
 import { voiceActivityService } from '../services/voiceActivityService';
+import { voiceCoinService } from '../services/voiceCoinService';
 import { PrivateRoomService } from '../services/privateRoomService';
 
 module.exports = {
@@ -8,6 +9,9 @@ module.exports = {
   async execute(oldState: VoiceState, newState: VoiceState) {
     // Voice activity tracking
     await voiceActivityService.handleVoiceStateUpdate(oldState, newState);
+    
+    // Voice coin tracking
+    await voiceCoinService.handleVoiceStateUpdate(oldState, newState);
 
     // Private room system
     const privateRoomService = PrivateRoomService.getInstance();

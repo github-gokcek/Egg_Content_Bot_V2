@@ -30,51 +30,50 @@ module.exports = {
       const crashGame = await getDoc(doc(db, 'crashGames', interaction.user.id));
       if (crashGame.exists()) {
         const gameData = crashGame.data();
-        // Bahsi geri ver
-        player.balance += gameData.bet;
+        // Bahsi geri verme (kaybedildiği için geri verme yok, zaten çıkarılmış)
+        // Sadece oyunu sil
         await deleteDoc(doc(db, 'crashGames', interaction.user.id));
-        cancelledGames.push(`🚀 Crash (${gameData.bet} 🪙)`);
+        cancelledGames.push(`🚀 Crash`);
       }
 
       // Mines oyunu kontrolü
       const minesGame = await getDoc(doc(db, 'minesGames', interaction.user.id));
       if (minesGame.exists()) {
         const gameData = minesGame.data();
-        // Bahsi geri ver
-        player.balance += gameData.bet;
+        // Bahsi geri verme (kaybedildiği için geri verme yok, zaten çıkarılmış)
+        // Sadece oyunu sil
         await deleteDoc(doc(db, 'minesGames', interaction.user.id));
-        cancelledGames.push(`💣 Mines (${gameData.bet} 🪙)`);
+        cancelledGames.push(`💣 Mines`);
       }
 
       // Blackjack oyunu kontrolü
       const blackjackGame = await getDoc(doc(db, 'blackjackGames', interaction.user.id));
       if (blackjackGame.exists()) {
         const gameData = blackjackGame.data();
-        // Orijinal bahsi geri ver (double yapıldıysa)
-        const refundAmount = gameData.originalBet || gameData.bet;
-        player.balance += refundAmount;
+        // Bahsi geri verme (kaybedildiği için geri verme yok, zaten çıkarılmış)
+        // Sadece oyunu sil
         await deleteDoc(doc(db, 'blackjackGames', interaction.user.id));
-        cancelledGames.push(`🎴 Blackjack (${refundAmount} 🪙)`);
+        cancelledGames.push(`🎴 Blackjack`);
       }
 
       // Slot oyunu kontrolü
       const slotGame = await getDoc(doc(db, 'slotGames', interaction.user.id));
       if (slotGame.exists()) {
         const gameData = slotGame.data();
-        // Bahsi geri ver
-        player.balance += gameData.bet;
+        // Bahsi geri verme (kaybedildiği için geri verme yok, zaten çıkarılmış)
+        // Sadece oyunu sil
         await deleteDoc(doc(db, 'slotGames', interaction.user.id));
-        cancelledGames.push(`🎰 Slot (${gameData.bet} 🪙)`);
+        cancelledGames.push(`🎰 Slot`);
       }
 
       // Coinflip oyunu kontrolü
       const coinflipGame = await getDoc(doc(db, 'coinflipGames', interaction.user.id));
       if (coinflipGame.exists()) {
         const gameData = coinflipGame.data();
-        // Bahsi geri ver
-        player.balance += gameData.bet;
+        // Bahsi geri verme (kaybedildiği için geri verme yok, zaten çıkarılmış)
+        // Sadece oyunu sil
         await deleteDoc(doc(db, 'coinflipGames', interaction.user.id));
-        cancelledGames.push(`🪙 Coinflip (${gameData.bet} 🪙)`);
+        cancelledGames.push(`🪙 Coinflip`);
       }
 
       if (cancelledGames.length === 0) {
@@ -90,7 +89,7 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor(0xffa500)
         .setTitle('🎰 Casino Oyunları İptal Edildi')
-        .setDescription('Tüm aktif oyunlarınız iptal edildi ve bahisleriniz iade edildi.')
+        .setDescription('Tüm aktif oyunlarınız iptal edildi.')
         .addFields(
           { name: '🎮 İptal Edilen Oyunlar', value: cancelledGames.join('\n'), inline: false },
           { name: '💳 Güncel Bakiye', value: `${player.balance} 🪙`, inline: false }

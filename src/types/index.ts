@@ -76,6 +76,7 @@ export interface Player {
   lolIgn?: string;
   tftIgn?: string;
   balance: number; // Bakiye sistemi
+  voicePackets: number; // Ses paketleri (her 5 dakika = 1 paket)
   createdAt: Date;
   stats: {
     lol: {

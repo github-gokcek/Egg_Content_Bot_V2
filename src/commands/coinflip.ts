@@ -41,6 +41,10 @@ module.exports = {
       });
     }
 
+    // Bahsi çıkar
+    player.balance -= amount;
+    await databaseService.updatePlayer(player);
+
     // PvP Mode
     if (opponent) {
       if (opponent.id === interaction.user.id) {
@@ -59,6 +63,9 @@ module.exports = {
 
       const opponentPlayer = await databaseService.getPlayer(opponent.id);
       if (!opponentPlayer) {
+        // Bahsi geri ver
+        player.balance += amount;
+        await databaseService.updatePlayer(player);
         return interaction.reply({
           content: `❌ ${opponent.username} henüz kayıt olmamış!`,
           ephemeral: true
@@ -66,11 +73,18 @@ module.exports = {
       }
 
       if (opponentPlayer.balance < amount) {
+        // Bahsi geri ver
+        player.balance += amount;
+        await databaseService.updatePlayer(player);
         return interaction.reply({
           content: `❌ ${opponent.username} kullanıcısının bakiyesi yetersiz!`,
           ephemeral: true
         });
       }
+
+      // Rakibin bahsini çıkar
+      opponentPlayer.balance -= amount;
+      await databaseService.updatePlayer(opponentPlayer);
 
       // PvP Coinflip
       const result = Math.random() < 0.5 ? 'heads' : 'tails';
@@ -82,8 +96,8 @@ module.exports = {
       const winnerPlayer = winner.id === interaction.user.id ? player : opponentPlayer;
       const loserPlayer = winner.id === interaction.user.id ? opponentPlayer : player;
 
-      winnerPlayer.balance += amount;
-      loserPlayer.balance -= amount;
+      // Kazanana 2x bahis ver (kendi bahsi + rakibin bahsi)
+      winnerPlayer.balance += amount * 2;
 
       await databaseService.updatePlayer(winnerPlayer);
       await databaseService.updatePlayer(loserPlayer);
@@ -102,7 +116,7 @@ module.exports = {
       return interaction.reply({ embeds: [embed] });
     }
 
-    // Solo Mode - Ev avantajı %52 (oyuncu %48 kazanma şansı)
+    // Solo Mode - Ev avantajı %60 (Önceki: %52)
     let playerGuess: string;
     
     if (!guess) {
@@ -127,8 +141,8 @@ module.exports = {
 
     playerGuess = guess;
 
-    // Ev avantajı: %52 bot kazanır
-    const houseWins = Math.random() < 0.52;
+    // Ev avantajı: %60 bot kazanır (Önceki: %52)
+    const houseWins = Math.random() < 0.60;
     let result: string;
     
     if (houseWins) {
@@ -143,7 +157,8 @@ module.exports = {
     const won = result === playerGuess;
 
     if (won) {
-      player.balance += amount;
+      // Kazanç ver: 2x bahis (kendi bahsi + kazanç)
+      player.balance += amount * 2;
       await databaseService.updatePlayer(player);
 
       const embed = new EmbedBuilder()
@@ -158,9 +173,7 @@ module.exports = {
 
       await interaction.reply({ embeds: [embed] });
     } else {
-      player.balance -= amount;
-      await databaseService.updatePlayer(player);
-
+      // Kaybetti (bahis zaten çıkarıldı)
       const embed = new EmbedBuilder()
         .setColor(0xff0000)
         .setTitle('💸 Coinflip - Kaybettin!')

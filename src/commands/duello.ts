@@ -28,12 +28,12 @@ function getCoinflipResult(): 'heads' | 'tails' {
 function getSlotResult(): { symbols: string[]; multiplier: number } {
   const symbols = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
   const multipliers: { [key: string]: number } = {
-    '🍒': 2,
-    '🍋': 3,
-    '🍊': 4,
-    '🍇': 5,
-    '💎': 10,
-    '7️⃣': 20
+    '🍒': 1.5,
+    '🍋': 2,
+    '🍊': 2.5,
+    '🍇': 3,
+    '💎': 5,
+    '7️⃣': 10
   };
 
   const result = [
@@ -49,7 +49,7 @@ function getSlotResult(): { symbols: string[]; multiplier: number } {
 
   // 2 eşleşme kontrolü
   if (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
-    return { symbols: result, multiplier: 1.5 };
+    return { symbols: result, multiplier: 1.2 };
   }
 
   return { symbols: result, multiplier: 0 };
@@ -123,6 +123,9 @@ module.exports = {
           ephemeral: true
         });
       }
+
+      // Validasyonlar
+      if (opponent.id === interaction.user.id) {
         return interaction.reply({
           content: '❌ Kendinize duello gönderemezsiniz!',
           ephemeral: true
@@ -323,6 +326,21 @@ async function handleDuelloButton(interaction: any) {
         content: '❌ Bu duelloya sadece davet edilen kişi cevap verebilir!',
         ephemeral: true
       });
+    }
+
+    // Çift tıklama önleme
+    if (game.isProcessing) {
+      return interaction.reply({
+        content: '❌ Duello zaten işleniyor, lütfen bekleyin!',
+        ephemeral: true
+      });
+    }
+
+    game.isProcessing = true;
+
+    // Geriye sayma interval'ini temizle
+    if (game.countdownInterval) {
+      clearInterval(game.countdownInterval);
     }
 
     activeGames.delete(gameId);

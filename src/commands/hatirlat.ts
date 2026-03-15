@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { db } from '../services/firebase';
-import { doc, setDoc, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 
 interface Reminder {
   id: string;
@@ -9,6 +9,45 @@ interface Reminder {
   message: string;
   remindAt: number; // timestamp
   createdAt: number;
+}
+
+// Periyodik kontrol fonksiyonu (index.ts'den çağrılacak)
+export async function checkReminders(client: any) {
+  try {
+    const now = Date.now();
+    const remindersSnapshot = await getDocs(collection(db, 'reminders'));
+    
+    for (const docSnap of remindersSnapshot.docs) {
+      const reminder = docSnap.data() as Reminder;
+      
+      if (reminder.remindAt <= now) {
+        // Hatırlatıcı zamanı geldi
+        try {
+          const channel = await client.channels.fetch(reminder.channelId);
+          if (channel && channel.isTextBased()) {
+            await channel.send({
+              content: `⏰ <@${reminder.userId}> **Hatırlatıcı:** ${reminder.message}`
+            });
+          }
+        } catch (error) {
+          // Kanal bulunamazsa DM gönder
+          try {
+            const user = await client.users.fetch(reminder.userId);
+            await user.send({
+              content: `⏰ **Hatırlatıcı:** ${reminder.message}`
+            });
+          } catch (dmError) {
+            console.error('Hatırlatıcı gönderilemedi:', dmError);
+          }
+        }
+        
+        // Hatırlatıcıyı sil
+        await deleteDoc(doc(db, 'reminders', reminder.id));
+      }
+    }
+  } catch (error) {
+    console.error('Hatırlatıcı kontrolü hatası:', error);
+  }
 }
 
 module.exports = {
@@ -78,42 +117,3 @@ module.exports = {
     }
   },
 };
-
-// Periyodik kontrol fonksiyonu (index.ts'den çağrılacak)
-export async function checkReminders(client: any) {
-  try {
-    const now = Date.now();
-    const remindersSnapshot = await getDocs(collection(db, 'reminders'));
-    
-    for (const docSnap of remindersSnapshot.docs) {
-      const reminder = docSnap.data() as Reminder;
-      
-      if (reminder.remindAt <= now) {
-        // Hatırlatıcı zamanı geldi
-        try {
-          const channel = await client.channels.fetch(reminder.channelId);
-          if (channel && channel.isTextBased()) {
-            await channel.send({
-              content: `⏰ <@${reminder.userId}> **Hatırlatıcı:** ${reminder.message}`
-            });
-          }
-        } catch (error) {
-          // Kanal bulunamazsa DM gönder
-          try {
-            const user = await client.users.fetch(reminder.userId);
-            await user.send({
-              content: `⏰ **Hatırlatıcı:** ${reminder.message}`
-            });
-          } catch (dmError) {
-            console.error('Hatırlatıcı gönderilemedi:', dmError);
-          }
-        }
-        
-        // Hatırlatıcıyı sil
-        await deleteDoc(doc(db, 'reminders', reminder.id));
-      }
-    }
-  } catch (error) {
-    console.error('Hatırlatıcı kontrolü hatası:', error);
-  }
-}

@@ -12,7 +12,9 @@ interface DuelloGame {
   createdAt: number;
   messageId?: string;
   channelId?: string;
-  challengerChoice?: 'heads' | 'tails'; // Yazı tura seçimi
+  challengerChoice?: 'heads' | 'tails';
+  countdownInterval?: NodeJS.Timeout; // Geriye sayma interval'ını sakla
+  isProcessing?: boolean; // Çift tıklama önleme
 }
 
 const activeGames = new Map<string, DuelloGame>();
@@ -54,6 +56,7 @@ function getSlotResult(): { symbols: string[]; multiplier: number } {
 }
 
 module.exports = {
+  handleDuelloButton,
   data: new SlashCommandBuilder()
     .setName('duello')
     .setDescription('Başka bir oyuncuya duello gönder')
@@ -108,8 +111,18 @@ module.exports = {
         });
       }
 
-      // Validasyonlar
-      if (opponent.id === interaction.user.id) {
+      // Aynı rakibe birden fazla duello gönderme kontrolü
+      const existingDuello = Array.from(activeGames.values()).find(
+        g => (g.challenger === interaction.user.id && g.opponent === opponent.id) ||
+             (g.challenger === opponent.id && g.opponent === interaction.user.id)
+      );
+
+      if (existingDuello) {
+        return interaction.reply({
+          content: '❌ Bu oyuncuyla zaten aktif bir duello var!',
+          ephemeral: true
+        });
+      }
         return interaction.reply({
           content: '❌ Kendinize duello gönderemezsiniz!',
           ephemeral: true
@@ -226,21 +239,70 @@ module.exports = {
       game.messageId = message.id;
       game.channelId = interaction.channelId;
 
-      // 1 dakika sonra sil
-      setTimeout(async () => {
-        activeGames.delete(gameId);
-        try {
-          await message.delete();
-        } catch (error) {
-          Logger.error('Duello mesajı silinemedi', error);
+      // Geriye sayma (1 dakika = 60 saniye)
+      let remainingTime = 60;
+      const countdownInterval = setInterval(async () => {
+        remainingTime--;
+
+        if (remainingTime <= 0) {
+          clearInterval(countdownInterval);
+          activeGames.delete(gameId);
+          try {
+            await message.delete();
+          } catch (error) {
+            Logger.error('Duello mesajı silinemedi', error);
+          }
+          return;
         }
-      }, 60 * 1000);
+
+        // Duello kabul edilmişse interval'i durdur
+        if (!activeGames.has(gameId)) {
+          clearInterval(countdownInterval);
+          return;
+        }
+
+        // Embed'i güncelle
+        const updatedEmbed = new EmbedBuilder()
+          .setColor(0xFFD700)
+          .setTitle('⚔️ Duello Daveti')
+          .setDescription(`${opponent} sana duello daveti geldi!`)
+          .addFields(
+            { name: '🎮 Oyun Modu', value: modeText, inline: true },
+            { name: '💰 Bahis Miktarı', value: `${amount} 🪙`, inline: true },
+            { name: '👤 Rakip', value: `${interaction.user.username}`, inline: true }
+          );
+
+        // Yazı tura modunda seçim bilgisi ekle
+        if (mode === 'coinflip') {
+          const challengerChoiceText = choice === 'heads' ? '🪙 Yazı' : '🪙 Tura';
+          const opponentChoiceText = choice === 'heads' ? '🪙 Tura' : '🪙 Yazı';
+          updatedEmbed.addFields(
+            { name: '🎯 Rakibin Seçimi', value: `${interaction.user.username} **${challengerChoiceText}** seçti\nSen **${opponentChoiceText}** olarak oynayacaksın`, inline: false }
+          );
+        }
+
+        updatedEmbed.addFields(
+          { name: '⏰ Kalan Süre', value: `${remainingTime} saniye`, inline: false }
+        )
+          .setThumbnail(interaction.user.displayAvatarURL())
+          .setTimestamp();
+
+        try {
+          await message.edit({ embeds: [updatedEmbed] });
+        } catch (error) {
+          Logger.error('Duello embed güncellenemedi', error);
+          clearInterval(countdownInterval);
+          activeGames.delete(gameId);
+        }
+      }, 1000); // Her 1 saniyede bir güncelle
+
+      game.countdownInterval = countdownInterval;
     }
   }
 };
 
 // Button handler (interactionCreate event'inde çağrılacak)
-export async function handleDuelloButton(interaction: any) {
+async function handleDuelloButton(interaction: any) {
   if (!interaction.isButton()) return;
 
   const customId = interaction.customId;
@@ -369,6 +431,11 @@ export async function handleDuelloButton(interaction: any) {
         content: '❌ Bu duelloya sadece davet edilen kişi cevap verebilir!',
         ephemeral: true
       });
+    }
+
+    // Geriye sayma interval'ini temizle
+    if (game.countdownInterval) {
+      clearInterval(game.countdownInterval);
     }
 
     activeGames.delete(gameId);

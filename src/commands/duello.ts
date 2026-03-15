@@ -18,6 +18,27 @@ module.exports = {
         .setDescription('Düello sonucunu gir')
         .addStringOption(opt => opt.setName('duello_id').setDescription('Düello ID').setRequired(true))
         .addUserOption(opt => opt.setName('kazanan').setDescription('Kazanan oyuncu').setRequired(true))
+    )
+    .addSubcommand(sub =>
+      sub.setName('rastgele')
+        .setDescription('Bir kullanıcıyla rastgele zar at veya yazı tura at')
+        .addStringOption(opt => opt.setName('mode').setDescription('Mod seçin').setRequired(true)
+          .addChoices(
+            { name: 'D2 (1-2)', value: 'd2' },
+            { name: 'D5 (1-5)', value: 'd5' },
+            { name: 'D10 (1-10)', value: 'd10' },
+            { name: 'D25 (1-25)', value: 'd25' },
+            { name: 'D50 (1-50)', value: 'd50' },
+            { name: 'D100 (1-100)', value: 'd100' },
+            { name: 'Yazı Tura', value: 'yazı-tura' }
+          ))
+        .addUserOption(opt => opt.setName('user').setDescription('Karşılaştırılacak kullanıcı').setRequired(true))
+        .addStringOption(opt => opt.setName('tahmin').setDescription('Yazı Tura tahmininiz (sadece yazı-tura modunda)')
+          .addChoices(
+            { name: '🪙 Yazı', value: 'heads' },
+            { name: '🪙 Tura', value: 'tails' }
+          ))
+        .addIntegerOption(opt => opt.setName('count').setDescription('Kaç defa atılacak (varsayılan: 1, sadece zar için)').setMinValue(1).setMaxValue(10))
     ),
   async execute(interaction: ChatInputCommandInteraction) {
     const subcommand = interaction.options.getSubcommand();
@@ -144,6 +165,112 @@ module.exports = {
           content: '❌ Kullanıcıya DM gönderilemedi! DM\'leri kapalı olabilir.',
           ephemeral: true
         });
+      }
+    }
+
+    else if (subcommand === 'rastgele') {
+      const mode = interaction.options.getString('mode', true);
+      const targetUser = interaction.options.getUser('user', true);
+      const count = interaction.options.getInteger('count') || 1;
+      const userGuess = interaction.options.getString('tahmin');
+
+      if (targetUser.id === interaction.user.id) {
+        return interaction.reply({
+          content: '❌ Kendinizle yarışamazsınız!',
+          ephemeral: true
+        });
+      }
+
+      if (targetUser.bot) {
+        return interaction.reply({
+          content: '❌ Botlarla yarışamazsınız!',
+          ephemeral: true
+        });
+      }
+
+      if (mode === 'yazı-tura') {
+        // Yazı-Tura modu: Bot aklından tutar, kullanıcılar tahmin eder
+        
+        if (!userGuess) {
+          return interaction.reply({
+            content: '❌ Yazı-Tura modu için `tahmin` parametresini seçmelisiniz! (Yazı veya Tura)',
+            ephemeral: true
+          });
+        }
+
+        // Bot aklından bir sonuç tutar
+        const botResult = Math.random() < 0.5 ? 'heads' : 'tails';
+        const botResultText = botResult === 'heads' ? '🪙 Yazı' : '🪙 Tura';
+        
+        // Kullanıcının tahmini
+        const user1GuessText = userGuess === 'heads' ? '🪙 Yazı' : '🪙 Tura';
+        
+        // Rakibin tahmini (otomatik olarak diğeri)
+        const user2Guess = userGuess === 'heads' ? 'tails' : 'heads';
+        const user2GuessText = user2Guess === 'heads' ? '🪙 Yazı' : '🪙 Tura';
+        
+        // Kazananı belirle
+        let winner = '';
+        let winnerUser = null;
+        
+        if (userGuess === botResult) {
+          winner = `🏆 **Kazanan:** ${interaction.user.username}`;
+          winnerUser = interaction.user;
+        } else {
+          winner = `🏆 **Kazanan:** ${targetUser.username}`;
+          winnerUser = targetUser;
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(0xffd700)
+          .setTitle('🪙 Yazı Tura Düellosu')
+          .setDescription(
+            `**Bot'un Sonucu:** ${botResultText}\n\n` +
+            `${interaction.user.username} tahmini: ${user1GuessText}\n` +
+            `${targetUser.username} tahmini: ${user2GuessText}\n\n` +
+            winner
+          )
+          .setFooter({ text: 'Bot aklından bir yazı-tura attı ve sonuç açıklandı!' })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      } else {
+        // Zar modu: Her iki kullanıcı da zar atar
+        const maxValue = parseInt(mode.substring(1));
+        const user1Results = [];
+        const user2Results = [];
+        
+        for (let i = 0; i < count; i++) {
+          user1Results.push(Math.floor(Math.random() * maxValue) + 1);
+          user2Results.push(Math.floor(Math.random() * maxValue) + 1);
+        }
+
+        const user1Total = user1Results.reduce((a, b) => a + b, 0);
+        const user2Total = user2Results.reduce((a, b) => a + b, 0);
+
+        const user1Text = user1Results.map((r, i) => `${i + 1}. 🎲 ${r}`).join('\n');
+        const user2Text = user2Results.map((r, i) => `${i + 1}. 🎲 ${r}`).join('\n');
+
+        let winner = '';
+        if (user1Total > user2Total) {
+          winner = `🏆 **Kazanan:** ${interaction.user.username} (${user1Total} > ${user2Total})`;
+        } else if (user2Total > user1Total) {
+          winner = `🏆 **Kazanan:** ${targetUser.username} (${user2Total} > ${user1Total})`;
+        } else {
+          winner = `🤝 **Berabere!** (${user1Total} = ${user2Total})`;
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(0xff6b6b)
+          .setTitle(`🎲 ${mode.toUpperCase()} Düellosu`)
+          .addFields(
+            { name: `${interaction.user.username}`, value: user1Text, inline: true },
+            { name: `${targetUser.username}`, value: user2Text, inline: true }
+          )
+          .setDescription(winner)
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
       }
     }
 

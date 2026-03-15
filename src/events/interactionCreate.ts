@@ -6,6 +6,7 @@ import { ComponentBuilder } from '../utils/componentBuilder';
 import { Logger } from '../utils/logger';
 import { db } from '../services/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { handleBlackjackButtons, handleCrashCashout, handleMinesButtons } from '../services/casinoHandlers';
 
 module.exports = {
   name: Events.InteractionCreate,
@@ -19,11 +20,15 @@ module.exports = {
         await command.execute(interaction);
       } catch (error) {
         Logger.error('Context menu komut hatası', error);
-        const reply = { content: 'Komut çalıştırılırken hata oluştu!', ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(reply);
-        } else {
-          await interaction.reply(reply);
+        const reply = { content: 'Komut çalıştırılırken hata oluştu!', flags: 64 };
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(reply);
+          } else {
+            await interaction.reply(reply);
+          }
+        } catch (replyError) {
+          Logger.error('Hata mesajı gönderilemedi', replyError);
         }
       }
       return;
@@ -38,11 +43,15 @@ module.exports = {
         await command.execute(interaction);
       } catch (error) {
         Logger.error('Komut hatası', error);
-        const reply = { content: 'Komut çalıştırılırken hata oluştu!', ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(reply);
-        } else {
-          await interaction.reply(reply);
+        const reply = { content: 'Komut çalıştırılırken hata oluştu!', flags: 64 };
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(reply);
+          } else {
+            await interaction.reply(reply);
+          }
+        } catch (replyError) {
+          Logger.error('Hata mesajı gönderilemedi', replyError);
         }
       }
     }
@@ -167,6 +176,17 @@ module.exports = {
 
     // Buttons
     if (interaction.isButton()) {
+      // Casino game buttons
+      if (interaction.customId.startsWith('blackjack_')) {
+        return handleBlackjackButtons(interaction);
+      }
+      if (interaction.customId === 'crash_cashout') {
+        return handleCrashCashout(interaction);
+      }
+      if (interaction.customId.startsWith('mines_')) {
+        return handleMinesButtons(interaction);
+      }
+
       // Rol seçim butonları
       if (interaction.customId.startsWith('role_')) {
         const roleId = interaction.customId.replace('role_', '');

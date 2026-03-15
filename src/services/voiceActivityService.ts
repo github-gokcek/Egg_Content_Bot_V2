@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } from '
 import { factionService } from './factionService';
 import { FP_RATES } from '../types/faction';
 import { Logger } from '../utils/logger';
+import { questService } from './questService';
 
 interface VoiceSession {
   userId: string;
@@ -96,6 +97,14 @@ class VoiceActivityService {
               lastFPAward: now,
               dailyFPEarned: session.dailyFPEarned + FP_RATES.VOICE_ACTIVITY_PER_10MIN,
             });
+            
+            // Quest tracking
+            try {
+              await questService.trackVoice(userId, 10);
+            } catch (error) {
+              Logger.error('Quest voice tracking error', error);
+            }
+            
             Logger.success('Voice FP verildi', { 
               userId, 
               amount: FP_RATES.VOICE_ACTIVITY_PER_10MIN,

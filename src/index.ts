@@ -1,4 +1,4 @@
-import { Client, Collection } from 'discord.js';
+import { Client, Collection, Partials } from 'discord.js';
 import { config } from './config';
 import { readdirSync } from 'fs';
 import { join } from 'path';
@@ -6,8 +6,16 @@ import 'dotenv/config';
 import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
 import { patchNotesService } from './services/patchNotesService';
+import { checkReminders } from './commands/hatirlat';
 
-const client = new Client({ intents: config.intents });
+const client = new Client({ 
+  intents: config.intents,
+  partials: [
+    Partials.Message, // Eski mesajlar için
+    Partials.Channel, // Kanal bilgisi için
+    Partials.Reaction, // Reaction bilgisi için
+  ]
+});
 
 // Commands collection
 (client as any).commands = new Collection();
@@ -42,6 +50,13 @@ voiceActivityService.start();
 // Start patch notes checking when bot is ready
 client.once('ready', (client) => {
   patchNotesService.startChecking(client);
+  
+  // Hatırlatıcı kontrolü (her dakika)
+  setInterval(() => {
+    checkReminders(client);
+  }, 60 * 1000);
+  
+  Logger.info('Hatırlatıcı sistemi başlatıldı');
 });
 
 client.login(config.token);

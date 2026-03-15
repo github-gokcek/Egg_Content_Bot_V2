@@ -1,0 +1,246 @@
+# 🎰 CASINO SİSTEMİ AÇILDI! 🎲
+
+Merhaba @everyone! 
+
+Botumuzda **Casino Sistemi** artık aktif! 🎉 Coin'lerinizi riske atarak büyük kazançlar elde edebilir veya şansınızı deneyebilirsiniz!
+
+---
+
+## 🎮 OYUNLAR
+
+### 🚀 **CRASH** - `/crash`
+**Nasıl Oynanır:**
+- Bahis yap ve çarpan artmaya başlar (1.00x → 2.00x → 3.00x...)
+- Çarpan her saniye 0.10x artar ve **CANLI** olarak güncellenir!
+- Crash olmadan önce **Cashout** butonuna bas ve kazancını al!
+- 30 saniye içinde cashout yapmazsan oyun crash olur ve bahsini kaybedersin!
+
+**Özellikler:**
+- ✅ Anlık çarpan güncellemesi
+- ✅ Crash olursa mesaj otomatik silinir
+- ✅ Minimum bahis: 10 🪙
+
+**Kazanma Şansı:**
+- %55 → 1.0x - 1.5x arası crash
+- %30 → 1.5x - 3.0x arası crash
+- %12 → 3.0x - 5.0x arası crash
+- %3 → 5.0x - 10.0x arası crash
+
+**Örnek:**
+```
+/crash miktar:100
+→ Çarpan 2.50x'e ulaştı
+→ Cashout yaptın!
+→ Kazanç: 250 🪙 (+150 🪙)
+```
+
+---
+
+### 💣 **MINES** - `/mines`
+**Nasıl Oynanır:**
+- 4x5 grid'de mayınlar gizli!
+- Karelere tıklayarak güvenli alanları bul (💎)
+- Her güvenli kare çarpanı artırır!
+- Mayına basarsan (💣) kaybedersin!
+- İstediğin zaman **Cashout** yapabilirsin!
+
+**Özellikler:**
+- ✅ 3-10 arası mayın sayısı seçebilirsin
+- ✅ Daha fazla mayın = Daha yüksek çarpan
+- ✅ Minimum bahis: 10 🪙
+
+**Çarpan Hesaplama:**
+```
+Çarpan = 1.0 + (Açılan Kare × (0.3 + Mayın Sayısı × 0.05))
+```
+
+**Örnek:**
+```
+/mines miktar:100 mayinlar:5
+→ 3 güvenli kare açtın
+→ Çarpan: 1.90x
+→ Cashout yaptın!
+→ Kazanç: 190 🪙 (+90 🪙)
+```
+
+---
+
+### 🎴 **BLACKJACK** - `/blackjack`
+**Nasıl Oynanır:**
+- Klasik Blackjack kuralları!
+- 21'e en yakın olan kazanır!
+- Krupiyeyi yen!
+
+**Aksiyonlar:**
+- **Hit** 🎴 → Kart çek
+- **Stand** ✋ → Dur
+- **Double** 💰 → Bahsi ikiye katla ve tek kart çek
+
+**Özellikler:**
+- ✅ Blackjack (21) = 1.5x kazanç!
+- ✅ Krupiye 17'de durur
+- ✅ Minimum bahis: 10 🪙
+
+**Örnek:**
+```
+/blackjack miktar:100
+→ Senin elin: K♠️ A♥️ (21 - BLACKJACK!)
+→ Kazanç: 150 🪙 (+50 🪙)
+```
+
+---
+
+### 🎰 **SLOT MACHINE** - `/slot`
+**Nasıl Oynanır:**
+- 3 makaralı slot makinesi!
+- 3 aynı sembol = Büyük kazanç!
+- 2 aynı sembol = Küçük kazanç!
+
+**Semboller ve Çarpanlar:**
+- 🍒 Kiraz → x2
+- 🍋 Limon → x3
+- 🍊 Portakal → x4
+- 🍇 Üzüm → x5
+- 💎 Elmas → x10
+- 7️⃣ Yedi → x20
+
+**Özellikler:**
+- ✅ 2 eşleşme = 1.5x kazanç
+- ✅ 3 eşleşme = Sembol çarpanı
+- ✅ Minimum bahis: 10 🪙
+
+**Örnek:**
+```
+/slot miktar:100
+→ 🎰 💎 💎 💎 🎰
+→ 3x Elmas!
+→ Kazanç: 1000 🪙 (+900 🪙)
+```
+
+---
+
+### 🪙 **COINFLIP** - `/coinflip`
+**Nasıl Oynanır:**
+- Yazı veya Tura seç!
+- %48 kazanma şansı (ev avantajı %52)
+- PvP modu: Başka bir oyuncuya meydan oku!
+
+**Modlar:**
+- **Solo:** Bot'a karşı oyna
+- **PvP:** Başka bir oyuncuya karşı oyna (kazanan hepsini alır!)
+
+**Özellikler:**
+- ✅ Solo modda 2x kazanç
+- ✅ PvP modda kazanan hepsini alır
+- ✅ Minimum bahis: 10 🪙
+
+**Örnek:**
+```
+/coinflip miktar:100 tahmin:Yazı
+→ Sonuç: 🪙 Yazı
+→ Kazandın!
+→ Kazanç: 200 🪙 (+100 🪙)
+```
+
+**PvP Örnek:**
+```
+/coinflip miktar:100 rakip:@User
+→ Sonuç: 🪙 Tura
+→ @User kazandı!
+→ 100 🪙 transfer edildi
+```
+
+---
+
+## 🛠️ YÖNETİM KOMUTU
+
+### `/casino iptal`
+**Ne İşe Yarar:**
+- Tüm aktif casino oyunlarını iptal eder
+- Bahislerin tamamını geri verir
+- "Aktif oyun var" hatası alıyorsan kullan!
+
+**İptal Edilen Oyunlar:**
+- 🚀 Crash
+- 💣 Mines
+- 🎴 Blackjack
+- 🎰 Slot
+- 🪙 Coinflip
+
+**Örnek:**
+```
+/casino iptal
+→ İptal edilen oyunlar:
+  🚀 Crash (100 🪙)
+  💣 Mines (50 🪙)
+→ Toplam iade: 150 🪙
+```
+
+---
+
+## 💡 İPUÇLARI
+
+### 🎯 Strateji Önerileri:
+1. **Crash:** Düşük çarpanlarda (1.5x-2.0x) cashout yap, güvenli oyna!
+2. **Mines:** Az mayınla başla (3-5), deneyim kazan!
+3. **Blackjack:** Double'ı akıllıca kullan, 11'de double yap!
+4. **Slot:** Düşük bahislerle uzun süre oyna, büyük vuruşu bekle!
+5. **Coinflip:** PvP modunda rakibini iyi seç!
+
+### ⚠️ Sorumlu Oyun:
+- Kaybetmeyi göze alabileceğin kadar bahis yap
+- Kayıpların peşinden koşma
+- Kazandığında dur, hepsini kaybetme!
+- Casino eğlence içindir, coin kazanmanın tek yolu değil!
+
+### 🐛 Sorun mu Yaşıyorsun?
+- "Aktif oyun var" hatası → `/casino iptal` kullan
+- Oyun dondu → `/casino iptal` ile sıfırla
+- Bahis geri gelmedi → Yetkililere ulaş
+
+---
+
+## 📊 İSTATİSTİKLER
+
+**Ev Avantajı:**
+- Crash: ~%15
+- Mines: Mayın sayısına göre değişir
+- Blackjack: ~%2 (en adil oyun!)
+- Slot: ~%10
+- Coinflip: %4 (solo), %0 (PvP)
+
+**En Yüksek Kazançlar:**
+- Crash: 10.0x (nadir!)
+- Mines: Sınırsız (tüm kareleri aç!)
+- Blackjack: 1.5x (Blackjack)
+- Slot: 20x (7️⃣ 7️⃣ 7️⃣)
+- Coinflip: 2x (solo), Sınırsız (PvP)
+
+---
+
+## 🎉 ÖZEL ÖZELLİKLER
+
+✅ **Anlık Güncellemeler:** Crash oyununda çarpan her saniye güncellenir!
+✅ **Otomatik Temizlik:** Crash olursa mesaj otomatik silinir!
+✅ **Güvenli İptal:** Tüm oyunları tek komutla iptal et!
+✅ **PvP Modu:** Coinflip'te arkadaşlarınla yarış!
+✅ **Adil Oyun:** Tüm sonuçlar rastgele belirlenir!
+
+---
+
+## 🚀 HEMEN BAŞLA!
+
+```
+/crash miktar:10        → Crash oyna
+/mines miktar:10        → Mines oyna
+/blackjack miktar:10    → Blackjack oyna
+/slot miktar:10         → Slot oyna
+/coinflip miktar:10     → Coinflip oyna
+/casino iptal           → Oyunları iptal et
+```
+
+**İyi şanslar ve sorumlu oynayın! 🎰🍀**
+
+---
+
+*Not: Tüm casino oyunları eğlence amaçlıdır. Gerçek para kullanılmamaktadır.*

@@ -20,6 +20,53 @@ Bot hakkında detaylı yardım menüsü. Farklı konular hakkında bilgi alabili
 
 ---
 
+## 🎰 Casino Komutları
+
+### `/casino iptal`
+Tüm aktif casino oyunlarınızı iptal edin ve bahislerinizi geri alın.
+- Crash, Mines, Blackjack, Slot, Coinflip oyunlarını iptal eder
+- Bahisler otomatik olarak iade edilir
+
+### `/crash`
+Crash oyunu oyna!
+- **Parametreler:**
+  - `miktar`: Bahis miktarı (minimum 10 coin)
+- Çarpan anlık olarak güncellenir
+- Cashout yaparak kazancınızı alın
+- Crash olursa mesaj otomatik silinir
+
+### `/mines`
+Mines oyunu oyna!
+- **Parametreler:**
+  - `miktar`: Bahis miktarı (minimum 10 coin)
+  - `mayinlar`: Mayın sayısı (3-10, varsayılan 5)
+- 4x5 grid'de mayınlardan kaçın
+- Her güvenli kare çarpanı artırır
+
+### `/blackjack`
+Blackjack oyunu oyna!
+- **Parametreler:**
+  - `miktar`: Bahis miktarı (minimum 10 coin)
+- Klasik blackjack kuralları
+- Hit, Stand, Double seçenekleri
+
+### `/slot`
+Slot makinesi oyna!
+- **Parametreler:**
+  - `miktar`: Bahis miktarı (minimum 10 coin)
+- 3 makaralı slot makinesi
+- Farklı kombinasyonlar farklı kazançlar
+
+### `/coinflip`
+Coinflip oyunu oyna!
+- **Parametreler:**
+  - `miktar`: Bahis miktarı (minimum 10 coin)
+  - `secim`: Yazı veya Tura
+- Basit şans oyunu
+- 2x kazanç
+
+---
+
 ## 👤 Kullanıcı Komutları
 
 ### `/kayit`

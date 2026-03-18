@@ -47,15 +47,17 @@ class VoiceActivityService {
   private async startSession(userId: string) {
     try {
       const now = new Date();
-      const session: VoiceSession = {
-        userId,
-        joinedAt: now,
-        lastPacketTime: now,
+      
+      // Firebase'e tarih objelerini ISO string olarak kaydet
+      await setDoc(doc(db, 'voiceSessions', userId), {
+        userId: userId,
+        joinedAt: now.toISOString(),
+        lastPacketTime: now.toISOString(), // İlk paket için başlangıç zamanı
         dailyPackets: 0,
         dailyFPEarned: 0,
-      };
-      await setDoc(doc(db, 'voiceSessions', userId), session);
-      Logger.info('Voice session başladı', { userId });
+      });
+      
+      Logger.info('Voice session başladı', { userId, startTime: now.toISOString() });
     } catch (error) {
       Logger.error('startSession error', error);
     }
@@ -75,21 +77,36 @@ class VoiceActivityService {
       const snapshot = await getDocs(collection(db, 'voiceSessions'));
       const now = new Date();
       
+      Logger.info('Checking voice sessions', { totalSessions: snapshot.docs.length });
+      
       for (const docSnap of snapshot.docs) {
-        const session = docSnap.data() as VoiceSession;
-        const userId = session.userId;
+        const data = docSnap.data();
+        const userId = data.userId;
 
+        // Tarih dönüşümü - Firebase'den string olarak geliyor
+        const lastPacketTime = data.lastPacketTime ? new Date(data.lastPacketTime) : new Date();
+        const joinedAt = data.joinedAt ? new Date(data.joinedAt) : new Date();
+        
         // 5 dakika paket kontrolü
-        const timeSinceLastPacket = now.getTime() - new Date(session.lastPacketTime).getTime();
+        const timeSinceLastPacket = now.getTime() - lastPacketTime.getTime();
+        
+        Logger.info('Session check', { 
+          userId, 
+          timeSinceLastPacket: Math.floor(timeSinceLastPacket / 1000), 
+          packetDuration: this.PACKET_DURATION / 1000,
+          dailyPackets: data.dailyPackets || 0,
+          lastPacketTimeStr: data.lastPacketTime
+        });
         
         if (timeSinceLastPacket >= this.PACKET_DURATION) {
           // Kaç paket tamamlandığını hesapla
           const completedPackets = Math.floor(timeSinceLastPacket / this.PACKET_DURATION);
-          const newFPEarned = session.dailyFPEarned + (completedPackets * FP_RATES.VOICE_ACTIVITY_PER_10MIN);
+          const dailyFPEarned = data.dailyFPEarned || 0;
+          const newFPEarned = dailyFPEarned + (completedPackets * FP_RATES.VOICE_ACTIVITY_PER_10MIN);
 
           // Günlük limite kontrol et
           if (newFPEarned > FP_RATES.VOICE_DAILY_CAP) {
-            Logger.info('Voice FP günlük limite ulaşıldı', { userId, dailyFP: session.dailyFPEarned });
+            Logger.info('Voice FP günlük limite ulaşıldı', { userId, dailyFP: dailyFPEarned });
             continue;
           }
 
@@ -103,14 +120,15 @@ class VoiceActivityService {
 
           if (success) {
             await updateDoc(doc(db, 'voiceSessions', userId), {
-              lastPacketTime: now,
-              dailyPackets: session.dailyPackets + completedPackets,
+              lastPacketTime: now.toISOString(),
+              dailyPackets: (data.dailyPackets || 0) + completedPackets,
               dailyFPEarned: newFPEarned,
             });
             
-            // Quest tracking - paket sayısı ile
+            // Quest tracking - dakika olarak gönder
             try {
               await questService.trackVoice(userId, completedPackets * 5);
+              Logger.success('Voice quest tracked', { userId, minutes: completedPackets * 5 });
             } catch (error) {
               Logger.error('Quest voice tracking error', error);
             }

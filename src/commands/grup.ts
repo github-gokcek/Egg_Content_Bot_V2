@@ -144,7 +144,7 @@ module.exports = {
           { name: 'Üyeler', value: group.members.map((m, i) => `${i + 1}. <@${m}>`).join('\n') },
           { name: 'Üye Sayısı', value: `${group.members.length}/5`, inline: true }
         )
-        .setTimestamp(group.createdAt);
+        .setTimestamp(group.createdAt instanceof Date ? group.createdAt : new Date(group.createdAt));
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
     }

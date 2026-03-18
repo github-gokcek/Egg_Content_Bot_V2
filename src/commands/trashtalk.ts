@@ -57,13 +57,11 @@ module.exports = {
     // Trashtalk mesajını gönder
     const embed = new EmbedBuilder()
       .setColor(0xff6b6b)
-      .setTitle('💬 TRASHTALK!')
-      .setDescription(`**${interaction.user.username}** → **${targetUser.username}**`)
-      .addFields({
-        name: '🔥 Mesaj',
-        value: message,
-        inline: false
-      })
+      .setTitle('📢 Sunucunun Dikkatine')
+      .setDescription(
+        `**${interaction.user.username}** → **${targetUser.username}**\n\n` +
+        `# ${message}`
+      )
       .setThumbnail(targetUser.displayAvatarURL())
       .setFooter({ text: `${interaction.user.username} tarafından gönderildi` })
       .setTimestamp();

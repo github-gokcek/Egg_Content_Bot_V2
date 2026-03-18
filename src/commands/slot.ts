@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
+import { questService } from '../services/questService';
 
 const SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
 const WEIGHTS = [40, 30, 15, 10, 4, 1]; // Toplam 100 - ev avantajı artırıldı (Önceki: 30, 25, 20, 15, 8, 2)
@@ -60,6 +61,10 @@ module.exports = {
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
+    // Quest tracking - Slot play ve casino spent
+    await questService.trackSlotPlay(interaction.user.id);
+    await questService.trackCasinoSpent(interaction.user.id, amount);
+
     // Spin
     const slot1 = spinSlot();
     const slot2 = spinSlot();
@@ -88,6 +93,12 @@ module.exports = {
       // Kazanç ver (bahis zaten çıkarıldı)
       player.balance += winAmount;
       await databaseService.updatePlayer(player);
+
+      // Quest tracking - Casino win
+      const netWin = winAmount - amount;
+      if (netWin > 0) {
+        await questService.trackCasinoWin(interaction.user.id, netWin);
+      }
 
       const embed = new EmbedBuilder()
         .setColor(0x00ff00)

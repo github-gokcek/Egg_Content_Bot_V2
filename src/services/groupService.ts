@@ -30,13 +30,24 @@ export class GroupService {
 
   async getGroup(groupId: string): Promise<Group | null> {
     const docSnap = await getDoc(doc(db, 'groups', groupId));
-    return docSnap.exists() ? docSnap.data() as Group : null;
+    if (!docSnap.exists()) return null;
+    
+    const data = docSnap.data();
+    return {
+      ...data,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+    } as Group;
   }
 
   async getUserGroup(userId: string): Promise<Group | null> {
     const snapshot = await getDocs(collection(db, 'groups'));
     for (const docSnap of snapshot.docs) {
-      const group = docSnap.data() as Group;
+      const data = docSnap.data();
+      const group = {
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+      } as Group;
+      
       if (group.members.includes(userId)) {
         return group;
       }

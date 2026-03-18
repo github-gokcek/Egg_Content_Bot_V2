@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
+import { questService } from '../services/questService';
 import { db } from '../services/firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
@@ -85,6 +86,10 @@ module.exports = {
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
+    // Quest tracking - Blackjack play ve casino spent
+    await questService.trackBlackjackPlay(interaction.user.id);
+    await questService.trackCasinoSpent(interaction.user.id, amount);
+
     // Oyun başlat
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
@@ -112,6 +117,10 @@ module.exports = {
       const winAmount = Math.floor(amount * 2.5);
       player.balance += winAmount;
       await databaseService.updatePlayer(player);
+
+      // Quest tracking - Casino win
+      const netWin = winAmount - amount;
+      await questService.trackCasinoWin(interaction.user.id, netWin);
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)

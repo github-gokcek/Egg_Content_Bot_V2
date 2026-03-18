@@ -78,6 +78,12 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
       // Ev avantajı: Kazanıldığında 1.8x ödeme (bahis + 0.8x kazanç)
       winAmount = Math.floor(game.bet * 1.8);
       player.balance += winAmount;
+      
+      // Quest tracking - Blackjack win ve casino win
+      const { questService } = await import('./questService');
+      await questService.trackBlackjackPlay(interaction.user.id, true);
+      const netWin = winAmount - game.bet;
+      await questService.trackCasinoWin(interaction.user.id, netWin, true);
     } else if (game.playerValue === game.dealerValue) {
       result = '🤝 Berabere!';
       color = 0xffff00;
@@ -147,6 +153,12 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
       // Ev avantajı: Kazanıldığında 1.8x ödeme (bahis + 0.8x kazanç)
       winAmount = Math.floor(game.bet * 1.8);
       currentPlayer.balance += winAmount;
+      
+      // Quest tracking - Blackjack win ve casino win
+      const { questService } = await import('./questService');
+      await questService.trackBlackjackPlay(interaction.user.id, true);
+      const netWin = winAmount - game.bet;
+      await questService.trackCasinoWin(interaction.user.id, netWin, true);
     } else if (game.playerValue === game.dealerValue) {
       result = '🤝 Berabere!';
       color = 0xffff00;
@@ -224,6 +236,14 @@ export async function handleCrashCashout(interaction: ButtonInteraction) {
   const winAmount = Math.floor(game.bet * currentMultiplier);
   player.balance += winAmount;
   await databaseService.updatePlayer(player);
+  
+  // Quest tracking - Crash cashout ve casino win
+  const { questService } = await import('./questService');
+  await questService.trackCrashPlay(interaction.user.id);
+  const netWin = winAmount - game.bet;
+  if (netWin > 0) {
+    await questService.trackCasinoWin(interaction.user.id, netWin, true);
+  }
 
   const embed = new EmbedBuilder()
     .setColor(0x00ff00)
@@ -263,6 +283,13 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
     const winAmount = Math.floor(game.bet * game.multiplier);
     player.balance += winAmount;
     await databaseService.updatePlayer(player);
+    
+    // Quest tracking - Mines cashout ve casino win
+    const { questService } = await import('./questService');
+    const netWin = winAmount - game.bet;
+    if (netWin > 0) {
+      await questService.trackCasinoWin(interaction.user.id, netWin, true);
+    }
 
     const embed = new EmbedBuilder()
       .setColor(0x00ff00)
@@ -317,6 +344,10 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
   // Safe tile
   game.safeRevealed++;
   game.multiplier = calculateMultiplier(game.safeRevealed, game.totalMines);
+  
+  // Quest tracking - Her tile açıldığında
+  const { questService } = await import('./questService');
+  await questService.trackMinesTiles(interaction.user.id, 1);
 
   // Tüm güvenli kareler açıldı mı?
   const totalSafeTiles = 20 - game.totalMines;
@@ -327,6 +358,13 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
     const winAmount = Math.floor(game.bet * game.multiplier);
     player.balance += winAmount;
     await databaseService.updatePlayer(player);
+    
+    // Quest tracking - Mines perfect game ve casino win
+    const { questService } = await import('./questService');
+    const netWin = winAmount - game.bet;
+    if (netWin > 0) {
+      await questService.trackCasinoWin(interaction.user.id, netWin, true);
+    }
 
     const embed = new EmbedBuilder()
       .setColor(0xffd700)

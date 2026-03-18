@@ -58,6 +58,158 @@ module.exports = {
 
     // Select Menu
     if (interaction.isStringSelectMenu()) {
+      // RPG Combat Item Usage
+      if (interaction.customId.startsWith('combat_use_item_')) {
+        const { useItemInCombat } = await import('../services/itemService');
+        const { rpgService } = await import('../services/rpgService');
+        const { db } = await import('../services/firebase');
+        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+        
+        const itemId = interaction.values[0];
+        const character = await rpgService.getCharacter(interaction.user.id);
+        
+        if (!character) {
+          return interaction.update({ content: '❌ Karakter bulunamadı!', components: [] });
+        }
+        
+        // Get active combat
+        const combatDoc = await getDoc(doc(db, 'activeCombats', interaction.user.id));
+        if (!combatDoc.exists()) {
+          return interaction.update({ content: '❌ Aktif savaş bulunamadı!', components: [] });
+        }
+        
+        const result = await useItemInCombat(character, itemId);
+        
+        if (!result.success) {
+          return interaction.update({ content: `❌ ${result.message}`, components: [] });
+        }
+        
+        // Update character
+        await rpgService.updateCharacter(character);
+        
+        // Update combat
+        const combat = combatDoc.data();
+        combat.turnCount++;
+        await updateDoc(doc(db, 'activeCombats', interaction.user.id), {
+          turnCount: combat.turnCount
+        });
+        
+        return interaction.update({ 
+          content: `✅ ${result.message}`, 
+          components: [] 
+        });
+      }
+      
+      // RPG Raid Item Usage
+      if (interaction.customId.startsWith('raid_use_item_')) {
+        const { useItemInCombat } = await import('../services/itemService');
+        const { rpgService } = await import('../services/rpgService');
+        const { db } = await import('../services/firebase');
+        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+        const { RaidCombat } = await import('../types/rpg');
+        
+        const raidId = interaction.customId.replace('raid_use_item_', '');
+        const itemId = interaction.values[0];
+        
+        // Get character - SADECE KENDI ENVANTERİNDEN
+        const character = await rpgService.getCharacter(interaction.user.id);
+        if (!character) {
+          return interaction.update({ content: '❌ Karakter bulunamadı!', components: [] });
+        }
+        
+        // Get raid
+        const raidDoc = await getDoc(doc(db, 'activeRaids', raidId));
+        if (!raidDoc.exists()) {
+          return interaction.update({ content: '❌ Raid bulunamadı!', components: [] });
+        }
+        
+        const raid = raidDoc.data() as RaidCombat;
+        
+        // Check if it's user's turn
+        if (raid.currentTurnUserId !== interaction.user.id) {
+          return interaction.update({ 
+            content: `❌ Şu an senin turun değil!`, 
+            components: [] 
+          });
+        }
+        
+        // Use item from OWN inventory
+        const result = await useItemInCombat(character, itemId);
+        
+        if (!result.success) {
+          return interaction.update({ content: `❌ ${result.message}`, components: [] });
+        }
+        
+        // Update character HP in raid state
+        const characterStats = rpgService.calculateDerivedStats(character);
+        raid.participantStates[interaction.user.id].hp = character.currentHp;
+        
+        // Update character in DB
+        await rpgService.updateCharacter(character);
+        
+        // Add to combat log
+        raid.turnCount++;
+        raid.combatLog.push(
+          `**Turn ${raid.turnCount}** - <@${interaction.user.id}> used ${itemId}!\n` +
+          `> ${result.message}`
+        );
+        
+        // Next turn
+        const { RaidService } = await import('../services/raidService');
+        raid.currentTurnUserId = RaidService.getNextTurnUser(raid.currentTurnUserId, raid.turnOrder);
+        
+        // Update raid
+        await updateDoc(doc(db, 'activeRaids', raidId), {
+          participantStates: raid.participantStates,
+          combatLog: raid.combatLog,
+          turnCount: raid.turnCount,
+          currentTurnUserId: raid.currentTurnUserId
+        });
+        
+        return interaction.update({ 
+          content: `✅ ${result.message}`, 
+          components: [] 
+        });
+      }
+      
+      // RPG Class Selection
+      if (interaction.customId === 'rpg_class_select') {
+        const { rpgService } = await import('../services/rpgService');
+        const { RPGClass } = await import('../types/rpg');
+        
+        const selectedClass = interaction.values[0] as RPGClass;
+        const characterName = interaction.user.username;
+        
+        try {
+          await rpgService.createCharacter(interaction.user.id, characterName, selectedClass);
+          
+          const { EmbedBuilder } = await import('discord.js');
+          const embed = new EmbedBuilder()
+            .setColor(0x00ff00)
+            .setTitle('✅ Karakter Oluşturuldu!')
+            .setDescription(
+              `**${characterName}** adlı karakterin başarıyla oluşturuldu!\n\n` +
+              `**Class:** ${selectedClass}\n` +
+              `**Level:** 1\n` +
+              `**Başlangıç RPG Coin:** 100 🪙\n\n` +
+              `Maceraya başlamak için \`/rpg profil\` komutunu kullan!`
+            )
+            .setThumbnail(interaction.user.displayAvatarURL())
+            .setTimestamp();
+          
+          await interaction.update({ embeds: [embed], components: [] });
+          Logger.success('RPG Character created via select menu', { userId: interaction.user.id, class: selectedClass });
+        } catch (error) {
+          Logger.error('RPG character creation error', error);
+          await interaction.update({ 
+            content: '❌ Karakter oluşturulurken bir hata oluştu!', 
+            embeds: [], 
+            components: [] 
+          });
+        }
+        return;
+      }
+      
       // Faction Store
       if (interaction.customId === 'faction_store_select') {
         const itemId = interaction.values[0];
@@ -191,6 +343,18 @@ module.exports = {
       }
       if (interaction.customId.startsWith('mines_')) {
         return handleMinesButtons(interaction);
+      }
+
+      // RPG Combat buttons
+      if (interaction.customId.startsWith('combat_')) {
+        const { handleCombatButton } = await import('../services/rpgCombatHandler');
+        return handleCombatButton(interaction);
+      }
+
+      // RPG Raid Combat buttons
+      if (interaction.customId.startsWith('raid_')) {
+        const { handleRaidCombatButton } = await import('../services/raidCombatHandler');
+        return handleRaidCombatButton(interaction);
       }
 
       // Rol seçim butonları

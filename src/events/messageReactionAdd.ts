@@ -36,9 +36,12 @@ module.exports = {
       }
 
       const messageAuthorId = reaction.message.author.id;
+      
+      // Emoji bilgisini al
+      const emoji = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : reaction.emoji.name;
 
       // Reaction veren kişi için tracking
-      await questService.trackReactionGiven(user.id, reaction.message.id, messageAuthorId);
+      await questService.trackReactionGiven(user.id, reaction.message.id, messageAuthorId, emoji);
 
       // Mesaj sahibi için tracking (kendi mesajına reaction vermediyse)
       if (messageAuthorId !== user.id && !reaction.message.author.bot) {

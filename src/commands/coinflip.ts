@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
+import { questService } from '../services/questService';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -45,6 +46,10 @@ module.exports = {
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
+    // Quest tracking - Coinflip play ve casino spent
+    await questService.trackCoinflipPlay(interaction.user.id);
+    await questService.trackCasinoSpent(interaction.user.id, amount);
+
     // PvP Mode
     if (opponent) {
       if (opponent.id === interaction.user.id) {
@@ -86,6 +91,10 @@ module.exports = {
       opponentPlayer.balance -= amount;
       await databaseService.updatePlayer(opponentPlayer);
 
+      // Quest tracking for opponent
+      await questService.trackCoinflipPlay(opponent.id);
+      await questService.trackCasinoSpent(opponent.id, amount);
+
       // PvP Coinflip
       const result = Math.random() < 0.5 ? 'heads' : 'tails';
       const resultText = result === 'heads' ? '🪙 Yazı' : '🪙 Tura';
@@ -101,6 +110,9 @@ module.exports = {
 
       await databaseService.updatePlayer(winnerPlayer);
       await databaseService.updatePlayer(loserPlayer);
+
+      // Quest tracking - Casino win
+      await questService.trackCasinoWin(winner.id, amount);
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
@@ -160,6 +172,9 @@ module.exports = {
       // Kazanç ver: 2x bahis (kendi bahsi + kazanç)
       player.balance += amount * 2;
       await databaseService.updatePlayer(player);
+
+      // Quest tracking - Casino win
+      await questService.trackCasinoWin(interaction.user.id, amount);
 
       const embed = new EmbedBuilder()
         .setColor(0x00ff00)

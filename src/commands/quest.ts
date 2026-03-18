@@ -35,35 +35,68 @@ module.exports = {
       .filter(q => q.completed)
       .reduce((sum, q) => sum + q.reward, 0);
 
-    const questList = userQuests.quests.map(quest => {
-      const progressBar = this.createProgressBar(quest.progress, quest.target);
-      const status = quest.completed ? '✅' : '⏳';
-      
-      return `${quest.emoji} **${quest.name}** ${status}\n` +
-             `${quest.description}\n` +
-             `${progressBar} ${quest.progress}/${quest.target}\n` +
-             `💰 Ödül: ${quest.reward} coin\n`;
-    }).join('\n');
+    // Kategorilere göre görevleri grupla
+    const categories = {
+      message: { name: '📨 Mesaj/Etkileşim', quests: [] as any[] },
+      social: { name: '🎭 Sosyal', quests: [] as any[] },
+      casino: { name: '🎰 Casino', quests: [] as any[] },
+      voice: { name: '🔊 Ses', quests: [] as any[] },
+      bonus: { name: '📊 Bonus', quests: [] as any[] },
+    };
+
+    userQuests.quests.forEach(quest => {
+      if (categories[quest.category]) {
+        categories[quest.category].quests.push(quest);
+      }
+    });
+
+    let questList = '';
+    for (const [key, cat] of Object.entries(categories)) {
+      if (cat.quests.length > 0) {
+        questList += `\n**${cat.name}**\n`;
+        cat.quests.forEach(quest => {
+          const progressBar = this.createProgressBar(quest.progress, quest.target);
+          const status = quest.completed ? '✅' : '⏳';
+          questList += `${quest.emoji} **${quest.name}** ${status}\n`;
+          questList += `${quest.description}\n`;
+          questList += `${progressBar} ${quest.progress}/${quest.target} | 💰 ${quest.reward} coin\n`;
+        });
+      }
+    }
 
     const embed = new EmbedBuilder()
-      .setColor(completedCount === 5 ? 0x00ff00 : 0x3498db)
+      .setColor(completedCount === userQuests.quests.length ? 0x00ff00 : 0x3498db)
       .setTitle(`📋 ${targetUser.username} - Günlük Görevler`)
       .setDescription(
-        `**İlerleme:** ${completedCount}/5 görev tamamlandı\n` +
-        `**Kazanılan:** ${totalReward} 🪙\n\n` +
+        `**İlerleme:** ${completedCount}/${userQuests.quests.length} görev tamamlandı\n` +
+        `**Kazanılan:** ${totalReward} 🪙\n` +
         questList
       )
-      .setFooter({ text: 'Görevler her gün sıfırlanır ve yeni görevler atanır!' })
       .setThumbnail(targetUser.displayAvatarURL())
       .setTimestamp();
 
-    if (completedCount === 5) {
+    // Özel görev bilgisi
+    if (userQuests.allDailyCompleted && userQuests.specialQuest) {
+      const special = userQuests.specialQuest;
+      const specialBar = this.createProgressBar(special.progress, special.target);
+      const specialStatus = special.completed ? '✅' : '⏳';
+      
+      embed.addFields({
+        name: '🏆 ÖZEL GÖREV (Tüm günlük görevler tamamlandı!)',
+        value: `${special.emoji} **${special.name}** ${specialStatus}\n` +
+               `${special.description}\n` +
+               `${specialBar} ${special.progress}/${special.target} | 💰 ${special.reward} coin`,
+        inline: false
+      });
+    } else if (completedCount === userQuests.quests.length) {
       embed.addFields({
         name: '🎉 Tebrikler!',
-        value: 'Bugünün tüm görevlerini tamamladın!',
+        value: 'Bugünün tüm günlük görevlerini tamamladın! Özel görev açıldı!',
         inline: false
       });
     }
+
+    embed.setFooter({ text: 'Görevler her gün sıfırlanır ve yeni görevler atanır!' });
 
     await interaction.editReply({ embeds: [embed] });
   },

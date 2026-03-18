@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
+import { questService } from '../services/questService';
 import { db } from '../services/firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Logger } from '../utils/logger';
@@ -88,6 +89,9 @@ module.exports = {
     // Bahsi hemen çıkar
     player.balance -= amount;
     await databaseService.updatePlayer(player);
+
+    // Quest tracking - Casino spent
+    await questService.trackCasinoSpent(interaction.user.id, amount);
 
     const game: CrashGame = {
       userId: interaction.user.id,

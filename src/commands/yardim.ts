@@ -11,27 +11,15 @@ module.exports = {
         .addChoices(
           { name: '🎮 Oyun Sistemi', value: 'oyun' },
           { name: '👥 Grup Sistemi', value: 'grup' },
-          { name: '💬 Mesaj Sistemi', value: 'mesaj' },
-          { name: '💰 Bakiye Sistemi', value: 'bakiye' },
-          { name: '⚔️ Düello Sistemi', value: 'duello' },
+          { name: '💰 Ekonomi & Casino', value: 'ekonomi' },
+          { name: '⚔️ RPG Sistemi', value: 'rpg' },
+          { name: '📋 Görev Sistemi', value: 'gorev' },
           { name: '🏴☠️ Faction Sistemi', value: 'faction' },
-          { name: '📋 Tüm Komutlar', value: 'komut' },
-          { name: '🚀 Başlangıç Rehberi', value: 'onboarding' }
+          { name: '📋 Tüm Komutlar', value: 'komut' }
         )
     ),
   async execute(interaction: ChatInputCommandInteraction) {
     const topic = interaction.options.getString('konu', true);
-
-    // Onboarding komutu sadece adminler kullanabilir
-    if (topic === 'onboarding') {
-      const isAdmin = interaction.memberPermissions?.has('Administrator');
-      if (!isAdmin) {
-        return interaction.reply({ 
-          content: '❌ Bu komut sadece adminler tarafından kullanılabilir!', 
-          ephemeral: true 
-        });
-      }
-    }
 
     let embed: EmbedBuilder;
 
@@ -39,547 +27,95 @@ module.exports = {
       case 'oyun':
         embed = new EmbedBuilder()
           .setColor(0x3498db)
-          .setTitle('🎮 Oyun Sistemi Rehberi')
-          .setDescription('**League of Legends** ve **Teamfight Tactics** maçları nasıl kurulur ve yönetilir?')
+          .setTitle('🎮 Oyun Sistemi')
           .addFields(
-            {
-              name: '📝 Oyun Kurma',
-              value: `**LoL Maçları:**
-\`\`\`
-/oyun_kur lol summoners_rift
-/oyun_kur lol aram
-\`\`\`
-
-**TFT Maçları:**
-\`\`\`
-/oyun_kur tft solo
-/oyun_kur tft double_up
-\`\`\`
-
-• Oyun kurulduktan sonra **katıl** butonuna basarak maça katılabilirsin
-• LoL maçlarında takım seçimi yapabilirsin (🔵 Mavi / 🔴 Kırmızı)
-• TFT maçlarında sıralama sistemine göre yerleşim yapılır`,
-              inline: false
-            },
-            {
-              name: '🏆 Kazanan Girme',
-              value: `**Sadece maçı oluşturan kişi veya adminler sonuç girebilir:**
-
-\`\`\`
-/oyun_win MAÇID blue
-/oyun_win MAÇID red
-\`\`\`
-
-**TFT için:**
-\`\`\`
-/tft_win MAÇID @oyuncu1 @oyuncu2 @oyuncu3
-\`\`\`
-
-• Maç ID'sini oyun mesajından kopyalayabilirsin
-• Kazanan takım/oyuncular otomatik olarak +10 bakiye alır
-• Sonuçlar log kanalına otomatik kaydedilir`,
-              inline: false
-            },
-            {
-              name: '🔧 Oyun Yönetimi',
-              value: `**Maç İptal Etme:**
-\`\`\`
-/oyun_iptal MAÇID
-\`\`\`
-
-**Ses Kanalları:**
-• Maç başladığında otomatik ses kanalları oluşturulur
-• Maç bittiğinde kanallar otomatik silinir
-• Manuel olarak kanalları yönetebilirsin`,
-              inline: false
-            }
+            { name: '📝 Maç Kur', value: '`/oyun_kur lol summoners_rift`\n`/oyun_kur tft solo`', inline: false },
+            { name: '🏆 Sonuç Gir', value: '`/oyun_win MAÇID blue`\n`/tft_win MAÇID @oyuncu1`', inline: false },
+            { name: '❌ İptal', value: '`/oyun_iptal MAÇID`', inline: false }
           )
-          .setFooter({ text: 'İyi oyunlar! 🎮' });
+          .setFooter({ text: 'Maç başladığında otomatik ses kanalları oluşur!' });
         break;
 
       case 'grup':
         embed = new EmbedBuilder()
           .setColor(0x9b59b6)
-          .setTitle('👥 Grup Sistemi Rehberi')
-          .setDescription('Arkadaşlarınla grup kurarak birlikte oyun oynayın!')
+          .setTitle('👥 Grup Sistemi')
           .addFields(
-            {
-              name: '🎯 Grup Kurma',
-              value: `**Grup Oluştur:**
-\`\`\`
-/grup_kur "Grup Adı" 5
-\`\`\`
-
-• Grup adı ve maksimum üye sayısını belirle
-• Sen otomatik olarak grup lideri olursun
-• Grup kurulduktan sonra davet linkini paylaşabilirsin`,
-              inline: false
-            },
-            {
-              name: '📨 Davet Sistemi',
-              value: `**Kişileri Davet Et:**
-\`\`\`
-/grup_davet @kullanici1 @kullanici2
-\`\`\`
-
-• Davet edilen kişilere **DM** gönderilir
-• DM'de **Kabul Et** ve **Reddet** butonları bulunur
-• Davet 5 dakika içinde cevaplanmazsa otomatik iptal olur
-
-**Davet Mesajı Örneği:**
-\`\`\`
-🎮 Grup Daveti!
-
-Seni "Efsane Takım" grubuna davet ediyor!
-Grup Lideri: @kullanici
-Üye Sayısı: 3/5
-
-[Kabul Et] [Reddet]
-\`\`\``,
-              inline: false
-            },
-            {
-              name: '⚙️ Grup Yönetimi',
-              value: `**Grup Bilgisi:**
-\`\`\`
-/grup_bilgi
-\`\`\`
-
-**Gruptan Ayrıl:**
-\`\`\`
-/grup_ayril
-\`\`\`
-
-**Grup Dağıt (Sadece Lider):**
-\`\`\`
-/grup_dagit
-\`\`\`
-
-• Grup lideri istediği zaman grubu dağıtabilir
-• Üyeler istedikleri zaman ayrılabilir
-• Lider gruptan ayrılırsa grup otomatik dağılır`,
-              inline: false
-            }
+            { name: '➕ Grup Kur', value: '`/grup olustur "Takım Adı" 5`', inline: false },
+            { name: '📨 Davet Et', value: '`/grup davet @kullanici`', inline: false },
+            { name: '📊 Bilgi', value: '`/grup bilgi`', inline: false },
+            { name: '🚪 Ayrıl', value: '`/grup cik`', inline: false }
           )
-          .setFooter({ text: 'Birlikte daha güçlüyüz! 👥' });
+          .setFooter({ text: 'Birlikte daha güçlüsünüz!' });
         break;
 
-      case 'mesaj':
-        embed = new EmbedBuilder()
-          .setColor(0xe67e22)
-          .setTitle('💬 Mesaj Sistemi Rehberi')
-          .setDescription('Bot üzerinden diğer oyunculara nasıl mesaj gönderilir?')
-          .addFields(
-            {
-              name: '📤 Mesaj Gönderme',
-              value: `**Tek Kişiye Mesaj:**
-\`\`\`
-/mesaj @kullanici "Merhaba! Oyun oynamak ister misin?"
-\`\`\`
-
-**Gruba Mesaj (Grup Lideri):**
-\`\`\`
-/grup_mesaj "Herkese merhaba! 20:00'da maç var!"
-\`\`\`
-
-• Mesajlar **DM** olarak gönderilir
-• Alıcı mesajı **Kabul Et** veya **Reddet** edebilir
-• Spam koruması vardır (dakikada maksimum 3 mesaj)`,
-              inline: false
-            },
-            {
-              name: '📨 Mesaj Alma',
-              value: `**Gelen Mesaj Örneği:**
-\`\`\`
-💬 Yeni Mesaj!
-
-Gönderen: @kullanici
-Mesaj: "Merhaba! Oyun oynamak ister misin?"
-
-[Kabul Et] [Reddet]
-\`\`\`
-
-**Kabul Et:** Mesajı onaylar ve gönderene bildirim gider
-**Reddet:** Mesajı reddeder, gönderen bilgilendirilir`,
-              inline: false
-            },
-            {
-              name: '🛡️ Güvenlik',
-              value: `**Spam Koruması:**
-• Dakikada maksimum 3 mesaj gönderebilirsin
-• Aynı kişiye 1 dakikada sadece 1 mesaj
-
-**Engelleme:**
-• İstemediğin mesajları reddet
-• Sürekli spam yapan kullanıcılar otomatik engellenir
-• Adminler tüm mesaj geçmişini görebilir`,
-              inline: false
-            }
-          )
-          .setFooter({ text: 'Saygılı iletişim kurallarını unutma! 💬' });
-        break;
-
-      case 'bakiye':
+      case 'ekonomi':
         embed = new EmbedBuilder()
           .setColor(0xf1c40f)
-          .setTitle('💰 Bakiye Sistemi Rehberi')
-          .setDescription('Oyun içi ekonomi sistemi nasıl çalışır?')
+          .setTitle('💰 Ekonomi & Casino')
           .addFields(
-            {
-              name: '💳 Bakiye Kazanma',
-              value: `**Başlangıç Bakiyesi:**
-• Kayıt olduğunda **100 coin** ile başlarsın
-
-**Oyun Kazançları:**
-\`\`\`
-LoL Maç Kazanma: +10 coin
-TFT İlk 3'e Girme: +10 coin
-Düello Kazanma: Bahis miktarı kadar
-\`\`\`
-
-**Günlük Bonus:**
-\`\`\`
-/gunluk_bonus
-\`\`\`
-• Her 24 saatte bir **5 coin** alabilirsin`,
-              inline: false
-            },
-            {
-              name: '🛒 Bakiye Kullanma',
-              value: `**Market Alışverişi:**
-\`\`\`
-/market
-\`\`\`
-• Rol satın al/sat
-• Fiyatlar arz-talebe göre değişir
-
-**Düello Bahisleri:**
-\`\`\`
-/duello @rakip 50
-\`\`\`
-• Rakibinle bahis oyna
-• Kazanan tüm parayı alır`,
-              inline: false
-            },
-            {
-              name: '📊 Bakiye Takibi',
-              value: `**Profil Görüntüleme:**
-\`\`\`
-/profil
-/profil @kullanici
-\`\`\`
-
-**Liderlik Tablosu:**
-\`\`\`
-/liderlik bakiye
-\`\`\`
-
-• En zengin oyuncuları gör
-• Kendi sıralamandaki yerini öğren
-• Haftalık/aylık istatistikler`,
-              inline: false
-            }
+            { name: '🎰 Casino Oyunları', value: '`/coinflip 50` - Yazı tura\n`/slot 100` - Slot makinesi\n`/blackjack 200` - Blackjack\n`/crash 150` - Crash oyunu\n`/mines 100` - Mayın tarlası\n`/casino iptal` - Aktif oyunları iptal et', inline: false },
+            { name: '🛒 Market', value: '`/market` - Özel eşyalar al\n• **Özel Oda** (5000 coin) - `/kisisel` ile 5 kişilik özel ses kanalı oluştur\n• **Sticker Ekleme** (2000 coin) - Sunucuya sticker ekletmek için admin bildirimi\n`/envanter` - Envanterini gör\n`/use` - Eşya kullan', inline: false },
+            { name: '💳 Bakiye', value: '`/bakiye` - Bakiyeni gör\n`/transfer @kullanici 50` - Para gönder\n`/gunluk` - Günlük ödül (her 24 saatte)', inline: false },
+            { name: '⚔️ Düello', value: '`/duello casino coinflip @rakip 100` - Casino düellosu (60 saniye kabul süresi)', inline: false }
           )
-          .setFooter({ text: 'Akıllıca harca, çok kazan! 💰' });
+          .setFooter({ text: 'Akıllıca oyna, çok kazan! Casino mesajları 65 saniye sonra silinir.' });
         break;
 
-      case 'duello':
+      case 'rpg':
         embed = new EmbedBuilder()
           .setColor(0xe74c3c)
-          .setTitle('⚔️ Düello Sistemi Rehberi')
-          .setDescription('Diğer oyuncularla 1v1 düello yaparak coin kazan!')
+          .setTitle('⚔️ RPG Sistemi')
           .addFields(
-            {
-              name: '🎯 Düello Başlatma',
-              value: `**Düello Teklifi:**
-\`\`\`
-/duello @rakip 50
-\`\`\`
-
-• Rakibini seç ve bahis miktarını belirle
-• Minimum bahis: **10 coin**
-• Maksimum bahis: Sahip olduğun coin miktarı
-• Rakibin de yeterli bakiyesi olmalı`,
-              inline: false
-            },
-            {
-              name: '🎮 Düello Türleri',
-              value: `**Mevcut Düello Türleri:**
-
-**🎲 Zar Atma:**
-• Her oyuncu 1-100 arası zar atar
-• Yüksek sayı kazanır
-• Eşitlik durumunda tekrar atılır
-
-**🃏 Kart Çekme:**
-• Standart 52'lik desteden kart çekilir
-• Yüksek kart kazanır (As en yüksek)
-• Eşitlik durumunda tekrar çekilir
-
-**⚡ Hızlı Tıklama:**
-• 10 saniye içinde butona en çok tıklayan kazanır
-• Spam koruması vardır`,
-              inline: false
-            },
-            {
-              name: '📋 Düello Süreci',
-              value: `**1. Teklif Gönderme:**
-\`\`\`
-/duello @rakip 50
-\`\`\`
-
-**2. Rakip Cevabı:**
-• **Kabul Et** - Düello başlar
-• **Reddet** - Düello iptal olur
-• 2 dakika cevap verilmezse otomatik iptal
-
-**3. Oyun Seçimi:**
-• Düello türü rastgele seçilir
-• Her iki oyuncu da aynı oyunu oynar
-
-**4. Sonuç:**
-• Kazanan tüm bahis miktarını alır
-• Sonuç log kanalına kaydedilir`,
-              inline: false
-            }
+            { name: '🎯 Başlangıç', value: '`/rpg baslat` - Karakter oluştur\n`/rpg profil` - Profilini gör', inline: false },
+            { name: '🗺️ Macera', value: '`/adventure` - Maceraya çık (**1 saat cooldown**)\n`/dinlen` - Dinlen ve iyileş (**1 saat cooldown, %50 HP/Mana**)', inline: false },
+            { name: '👹 Raid', value: '`/raid` - Grup raid başlat (**Günde 2 raid limiti**)\nHer gece 00:00\'da limit sıfırlanır', inline: false },
+            { name: '🛒 Mağaza', value: '`/rpg magaza` - Eşya al\n`/rpg envanter` - Envanterini gör', inline: false }
           )
-          .setFooter({ text: 'Şansını dene, ama dikkatli ol! ⚔️' });
+          .setFooter({ text: 'Seviyeni yükselt, güçlen!' });
+        break;
+
+      case 'gorev':
+        embed = new EmbedBuilder()
+          .setColor(0x3498db)
+          .setTitle('📋 Görev Sistemi')
+          .addFields(
+            { name: '📝 Görevler', value: '`/quest` - Günlük görevlerini gör\n`/quest tamamla` - Ödül topla', inline: false },
+            { name: '🎯 Görev Türleri', value: '• Mesaj gönder (sabah/akşam saatlerinde)\n• Ses kanalında kal (5/15/30/60/120 dakika)\n• Casino oyna (blackjack, slot, coinflip)\n• RPG macerası\n• Emoji kullan\n• Kullanıcılarla etkileşim', inline: false },
+            { name: '🆕 Ses Takibi', value: '`/ses` - Ses kanalında geçirdiğin süreyi gör\nHer gece 00:00\'da sıfırlanır', inline: false },
+            { name: '🎁 Ödüller', value: 'Her görev tamamlandığında coin ve XP kazan!', inline: false }
+          )
+          .setFooter({ text: 'Her gün yeni görevler!' });
         break;
 
       case 'faction':
         embed = new EmbedBuilder()
           .setColor(0xf39c12)
-          .setTitle('🏴☠️ Faction Sistemi Rehberi')
-          .setDescription('League of Legends evrenindeki bölgelere özel faction sistemi!')
+          .setTitle('🏴☠️ Faction Sistemi')
           .addFields(
-            {
-              name: '🎯 Faction Nedir?',
-              value: `**Faction sistemi ile:**
-• Bir bölgeye ait olursun (Demacia, Bilgewater)
-• Aktivitelerle **Faction Points (FP)** kazanırsın
-• FP ile tier yükseltir ve özel itemler alırsın
-• Faction vs Faction maçlarına katılırsın`,
-              inline: false
-            },
-            {
-              name: '💰 Faction Katılma',
-              value: `**Tier 1 Satın Al:**
-\`\`\`
-/faction join faction:Demacia
-\`\`\`
-• Fiyat: **50 coin**
-• FP kazanmaya başlarsın`,
-              inline: false
-            },
-            {
-              name: '💎 FP Kazanma',
-              value: `**Nasıl FP Kazanılır:**
-• Maç kazanma: **15 FP**
-• Maç tamamlama: **10 FP**
-• Ses kanalı: **1 FP/10dk**
-
-**Progress Boost:**
-• %33: **+10% FP**
-• %66: **+20% FP**`,
-              inline: false
-            },
-            {
-              name: '⬆️ Tier 2',
-              value: `\`\`\`
-/faction upgrade
-\`\`\`
-• Gerekli: **500 FP**
-• Faction maçlarına katıl`,
-              inline: false
-            },
-            {
-              name: '📊 Diğer Komutlar',
-              value: `\`/faction progress\` - İlerleme
-\`/faction_store\` - Mağaza
-\`/faction_leaderboard\` - Sıralama
-\`/faction_match\` - Faction maçı`,
-              inline: false
-            }
+            { name: '🎯 Katıl', value: '`/faction join` - Faction seç (50 coin)', inline: false },
+            { name: '📊 İlerleme', value: '`/faction progress` - İlerlemeyi gör\n`/faction upgrade` - Tier yükselt (500 FP)', inline: false },
+            { name: '💎 FP Kazan', value: '• Maç kazan: 15 FP\n• Ses kanalı: 1 FP/10dk', inline: false },
+            { name: '🏆 Sıralama', value: '`/faction_leaderboard`', inline: false }
           )
-          .setFooter({ text: 'Factionını seç, güçlendir! 🏴☠️' });
+          .setFooter({ text: 'Factionını güçlendir!' });
         break;
 
       case 'komut':
         embed = new EmbedBuilder()
           .setColor(0x2ecc71)
           .setTitle('📋 Tüm Komutlar')
-          .setDescription('Botun tüm komutlarının kısa açıklamaları:')
           .addFields(
-            {
-              name: '🎮 Oyun Komutları',
-              value: `\`/oyun_kur\` - LoL/TFT maçı kur
-\`/oyun_win\` - Maç sonucunu gir
-\`/oyun_iptal\` - Maçı iptal et
-\`/tft_win\` - TFT sonucunu gir`,
-              inline: true
-            },
-            {
-              name: '👥 Grup Komutları',
-              value: `\`/grup_kur\` - Grup oluştur
-\`/grup_davet\` - Kişileri davet et
-\`/grup_bilgi\` - Grup bilgilerini gör
-\`/grup_ayril\` - Gruptan ayrıl
-\`/grup_dagit\` - Grubu dağıt`,
-              inline: true
-            },
-            {
-              name: '💰 Ekonomi Komutları',
-              value: `\`/market\` - Rol al/sat
-\`/duello\` - Düello başlat
-\`/profil\` - Profil görüntüle
-\`/liderlik\` - Liderlik tablosu`,
-              inline: true
-            },
-            {
-              name: '🏴☠️ Faction Komutları',
-              value: `\`/faction\` - Faction sistemi
-\`/faction_store\` - FP mağazası
-\`/faction_leaderboard\` - Sıralama
-\`/faction_match\` - Faction maçı`,
-              inline: true
-            },
-            {
-              name: '💬 İletişim Komutları',
-              value: `\`/mesaj\` - Mesaj gönder
-\`/grup_mesaj\` - Gruba mesaj`,
-              inline: true
-            },
-            {
-              name: '⚙️ Yönetim Komutları',
-              value: `\`/set\` - Kanal ayarları
-\`/bot\` - Bot durumu
-\`/kayit\` - Oyuncu kaydı`,
-              inline: true
-            },
-            {
-              name: '❓ Yardım',
-              value: `\`/yardim\` - Bu yardım menüsü
-\`/ping\` - Bot gecikmesi`,
-              inline: true
-            }
+            { name: '🎮 Oyun', value: '`/oyun_kur` `/oyun_win` `/oyun_iptal`', inline: true },
+            { name: '👥 Grup', value: '`/grup` komutları', inline: true },
+            { name: '💰 Ekonomi', value: '`/coinflip` `/slot` `/blackjack` `/crash` `/mines` `/market` `/kisisel`', inline: true },
+            { name: '⚔️ RPG', value: '`/rpg` `/adventure` `/dinlen` `/raid`', inline: true },
+            { name: '📋 Görev', value: '`/quest` `/ses`', inline: true },
+            { name: '🏴☠️ Faction', value: '`/faction` komutları', inline: true },
+            { name: '🔧 Diğer', value: '`/bakiye` `/profil` `/liderlik` `/transfer` `/gunluk` `/envanter` `/use`', inline: true },
+            { name: '🤖 Bot', value: '`/bot reklam` - Reklam mesajı gönder\n`/set reklam` - Reklam kanalı ayarla', inline: true }
           )
           .setFooter({ text: 'Detaylı bilgi için /yardim [konu] kullan!' });
-        break;
-
-      case 'onboarding':
-        embed = new EmbedBuilder()
-          .setColor(0x00ff00)
-          .setTitle('# 🚀 Hoş Geldin! Bot Kullanım Rehberi')
-          .setDescription('## **Merhaba!** Bu sunucuda oyun oynamak için botumuzla tanışman gerekiyor. Merak etme, çok kolay! 😊')
-          .addFields(
-            {
-              name: '# 📱 Discord Slash Komutları Nedir?',
-              value: `## Discord'un **modern komut sistemi**ni kullanıyoruz. Bu çok kolay!
-
-## **Nasıl Çalışır:**
-### 1️⃣ Mesaj kutusuna \`/\` (slash) yaz
-### 2️⃣ Komut listesi çıkacak, istediğini seç
-### 3️⃣ Gerekli bilgileri doldur
-### 4️⃣ Enter'a bas!
-
-## **Örnek:**
-### \`\`\`
-/ping
-\`\`\`
-## Bu komutu yazıp Enter'a basarsan bot sana cevap verecek! 🏓`,
-              inline: false
-            },
-            {
-              name: '# 📝 İLK İŞ: Kayıt Ol!',
-              value: `## **Oyun oynamadan önce mutlaka kayıt olmalısın:**
-
-### \`\`\`
-/kayit "LoL_Kullanici_Adin#TAG" "TFT_Kullanici_Adin#TAG"
-\`\`\`
-
-## **⚠️ ÖNEMLİ:** Riot hesap adınızı yazarken **#** ile başlayan etiketinizi de eklemeyi unutmayın!
-
-### **Örnek:**
-\`\`\`
-/kayit "EfsaneOyuncu#TR1" "EfsaneOyuncu#TR1"
-/kayit "ProPlayer#EUW" "TFTMaster#EUW"
-\`\`\`
-
-## **💡 İPUCU:** LoL ve TFT hesap adların aynıysa, ikisine de aynı şeyi yazabilirsin!
-
-## **✅ Kayıt olduktan sonra:**
-### • 100 coin ile başlarsın 💰
-### • Oyunlara katılabilirsin 🎮
-### • Profil sayfan oluşur 📊`,
-              inline: false
-            },
-            {
-              name: '# 🎮 İlk Oyununu Oyna!',
-              value: `## **Kayıt olduktan sonra hemen oyun kurabilirsin:**
-
-## **League of Legends:**
-### \`\`\`
-/oyun_kur lol summoners_rift
-/oyun_kur lol aram
-\`\`\`
-
-## **Teamfight Tactics:**
-### \`\`\`
-/oyun_kur tft solo
-/oyun_kur tft double_up
-\`\`\`
-
-## **Nasıl Çalışır:**
-### 1️⃣ Komutu yaz ve Enter'a bas
-### 2️⃣ Bot bir mesaj gönderecek
-### 3️⃣ **"Katıl"** butonuna bas
-### 4️⃣ Diğer oyuncuların katılmasını bekle
-### 5️⃣ Oyun başladığında otomatik ses kanalları oluşur! 🔊`,
-              inline: false
-            },
-            {
-              name: '# 💡 Komut Yazma İpuçları',
-              value: `## **Kolay Yöntem:**
-### • \`/\` yazdıktan sonra komut adının ilk harflerini yaz
-### • Örnek: \`/oy\` yazarsan \`/oyun_kur\` çıkacak
-### • Tab tuşuyla otomatik tamamlayabilirsin
-
-## **Seçenekler:**
-### • Komutlarda seçenekler varsa Discord sana gösterecek
-### • Zorunlu alanlar **kırmızı** \`*\` ile işaretli
-### • İsteğe bağlı alanları boş bırakabilirsin
-
-## **Hata Yapma Korkusu:**
-### • Yanlış yaparsan bot sana söyler, merak etme! 😅
-### • Komutları istediğin kadar deneyebilirsin`,
-              inline: false
-            },
-            {
-              name: '# 🆘 Yardıma İhtiyacın Var mı?',
-              value: `## **Detaylı yardım için:**
-### \`\`\`
-/yardim oyun     → Oyun sistemi
-/yardim grup     → Grup kurma
-/yardim mesaj    → Mesajlaşma
-/yardim bakiye   → Para sistemi
-/yardim duello   → Düello sistemi
-/yardim komut    → Tüm komutlar
-\`\`\`
-
-## **Hızlı Başlangıç:**
-### 1️⃣ \`/kayit\` ile kayıt ol
-### 2️⃣ \`/oyun_kur\` ile oyun kur
-### 3️⃣ \`/profil\` ile profilini gör
-### 4️⃣ \`/yardim\` ile daha fazla öğren!
-
-## **Takıldığın Yer Olursa:**
-### • Adminlere sorabilirsin
-### • \`/yardim\` komutunu kullan
-### • Deneme yanılma ile öğrenebilirsin! 🎯`,
-              inline: false
-            }
-          )
-          .setFooter({ text: 'İyi oyunlar! Herhangi bir sorun olursa adminlere sor! 🎮✨' });
         break;
 
       default:
@@ -589,7 +125,6 @@ Düello Kazanma: Bahis miktarı kadar
           .setDescription('Geçersiz yardım konusu!');
     }
 
-    const isOnboarding = topic === 'onboarding';
-    await interaction.reply({ embeds: [embed], ephemeral: !isOnboarding });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
   },
 };

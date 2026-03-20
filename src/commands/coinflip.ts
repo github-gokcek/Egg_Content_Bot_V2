@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
 import { questService } from '../services/questService';
+import { autoDeleteMessage } from '../utils/messageCleanup';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -112,7 +113,7 @@ module.exports = {
       await databaseService.updatePlayer(loserPlayer);
 
       // Quest tracking - Casino win
-      await questService.trackCasinoWin(winner.id, amount);
+      await questService.trackCasinoWin(winner.id, amount, true);
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
@@ -125,7 +126,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
     }
 
     // Solo Mode - Ev avantajı %60 (Önceki: %52)
@@ -174,7 +175,7 @@ module.exports = {
       await databaseService.updatePlayer(player);
 
       // Quest tracking - Casino win
-      await questService.trackCasinoWin(interaction.user.id, amount);
+      await questService.trackCasinoWin(interaction.user.id, amount, true);
 
       const embed = new EmbedBuilder()
         .setColor(0x00ff00)
@@ -186,7 +187,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
     } else {
       // Kaybetti (bahis zaten çıkarıldı)
       const embed = new EmbedBuilder()
@@ -199,7 +200,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
     }
   },
 };

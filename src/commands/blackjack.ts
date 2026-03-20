@@ -3,6 +3,7 @@ import { databaseService } from '../services/databaseService';
 import { questService } from '../services/questService';
 import { db } from '../services/firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { autoDeleteMessage } from '../utils/messageCleanup';
 
 interface BlackjackGame {
   userId: string;
@@ -118,9 +119,10 @@ module.exports = {
       player.balance += winAmount;
       await databaseService.updatePlayer(player);
 
-      // Quest tracking - Casino win
+      // Quest tracking - Blackjack WIN ve Casino win
+      await questService.trackBlackjackPlay(interaction.user.id, true);
       const netWin = winAmount - amount;
-      await questService.trackCasinoWin(interaction.user.id, netWin);
+      await questService.trackCasinoWin(interaction.user.id, netWin, true);
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
@@ -133,7 +135,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
     }
 
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(

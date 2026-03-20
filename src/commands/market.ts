@@ -18,7 +18,8 @@ module.exports = {
           .addChoices(
             { name: '👑 Custom Title - 5000 coin', value: 'custom_title' },
             { name: '⬇️ Derank - 1000 coin', value: 'derank' },
-            { name: '⬆️ Uprank - 3000 coin', value: 'uprank' },
+            { name: '🚪 Özel Oda - 5000 coin', value: 'private_room' },
+            { name: '🎭 Sticker Ekleme - 2000 coin', value: 'sticker_add' },
             { name: '📌 Pin - 500 coin', value: 'pin' },
             { name: '💬 Trashtalk - 100 coin', value: 'trashtalk' }
           ))

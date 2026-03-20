@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, PermissionFlagsBits, ChannelType, EmbedBuilder } from 'discord.js';
 import { configService } from '../services/configService';
+import { setAdChannel } from '../services/botSettings';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -72,6 +73,17 @@ module.exports = {
             .addChannelTypes(ChannelType.GuildText)
             .setRequired(true)
         )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('reklam')
+        .setDescription('Reklam kanalını ayarla')
+        .addChannelOption(option =>
+          option.setName('kanal')
+            .setDescription('Reklam kanalı')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
     ),
   async execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guildId) {
@@ -114,6 +126,16 @@ module.exports = {
       await configService.setLeaderboardChannel(interaction.guildId, channel.id);
       await interaction.reply({ 
         content: `✅ Liderlik tablosu kanalı <#${channel.id}> olarak ayarlandı!`,
+        ephemeral: true 
+      });
+      return;
+    }
+
+    if (subcommand === 'reklam') {
+      const channel = interaction.options.getChannel('kanal', true);
+      await setAdChannel(channel.id);
+      await interaction.reply({ 
+        content: `✅ Reklam kanalı <#${channel.id}> olarak ayarlandı!`,
         ephemeral: true 
       });
       return;

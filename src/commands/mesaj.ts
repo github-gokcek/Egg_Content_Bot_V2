@@ -22,5 +22,5 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   await targetChannel.send(content);
-  await interaction.reply({ content: `✅ Mesaj ${targetChannel} kanalına gönderildi!`, ephemeral: true });
+  await interaction.reply({ content: ` Mesaj ${targetChannel} kanalına gönderildi!`, ephemeral: true });
 }

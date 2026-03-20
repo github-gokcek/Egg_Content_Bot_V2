@@ -1,12 +1,15 @@
 import { Client, Collection, Partials } from 'discord.js';
 import { config } from './config';
-import { readdirSync } from 'fs';
+import { readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import 'dotenv/config';
 import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
 import { voiceCoinService } from './services/voiceCoinService';
 import { patchNotesService } from './services/patchNotesService';
+import { getAdChannel } from './services/botSettings';
+import { EmbedBuilder, AttachmentBuilder } from 'discord.js';
+import path from 'path';
 const { checkReminders } = require('./commands/hatirlat');
 
 const client = new Client({ 
@@ -59,6 +62,69 @@ client.once('ready', (client) => {
   setInterval(async () => {
     await checkReminders(client);
   }, 60 * 1000);
+  
+  // Reklam mesajı (her 30 dakika)
+  setInterval(async () => {
+    const adChannelId = await getAdChannel();
+    if (adChannelId) {
+      try {
+        const channel = await client.channels.fetch(adChannelId);
+        if (channel && channel.isTextBased()) {
+          const imagePath = path.join(process.cwd(), 'assetler', 'Ninja.png');
+          
+          // Görsel dosyası kontrolü
+          if (!existsSync(imagePath)) {
+            Logger.error('Reklam görseli bulunamadı: assetler/Ninja.png');
+            return;
+          }
+          
+          const attachment = new AttachmentBuilder(imagePath);
+          
+          const embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle('🎮 Botun Tüm Özelliklerini Keşfet!')
+            .setDescription(
+              '**Casino sistemini** denediniz mi? 🎰\n' +
+              '**RPG maceralarına** katıldınız mı? ⚔️\n' +
+              '**Günlük görevlerinizi** tamamladınız mı? 📋\n\n' +
+              '**Komutları keşfet:** `/yardim`'
+            )
+            .setImage('attachment://Ninja.png')
+            .setTimestamp();
+          
+          await channel.send({ embeds: [embed], files: [attachment] });
+          Logger.info('Reklam mesajı gönderildi');
+        }
+      } catch (error) {
+        Logger.error('Reklam mesajı gönderilemedi:', error);
+      }
+    }
+  }, 30 * 60 * 1000); // 30 dakika
+  
+  // Günlük reset (her gece 00:00)
+  const scheduleDailyReset = () => {
+    const now = new Date();
+    const night = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1, // Yarın
+      0, 0, 0 // 00:00:00
+    );
+    const msToMidnight = night.getTime() - now.getTime();
+    
+    setTimeout(async () => {
+      Logger.info('Günlük reset başlatılıyor...');
+      await voiceActivityService.resetDailyVoice();
+      Logger.success('Günlük reset tamamlandı');
+      
+      // Bir sonraki gün için schedule et
+      scheduleDailyReset();
+    }, msToMidnight);
+    
+    Logger.info(`Günlük reset ${Math.floor(msToMidnight / 1000 / 60)} dakika sonra çalışacak`);
+  };
+  
+  scheduleDailyReset();
   
   Logger.info('Hatırlatıcı sistemi başlatıldı');
 });

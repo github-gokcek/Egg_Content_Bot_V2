@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
 import { questService } from '../services/questService';
+import { autoDeleteMessage } from '../utils/messageCleanup';
 
 const SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
 const WEIGHTS = [40, 30, 15, 10, 4, 1]; // Toplam 100 - ev avantajı artırıldı (Önceki: 30, 25, 20, 15, 8, 2)
@@ -97,7 +98,7 @@ module.exports = {
       // Quest tracking - Casino win
       const netWin = winAmount - amount;
       if (netWin > 0) {
-        await questService.trackCasinoWin(interaction.user.id, netWin);
+        await questService.trackCasinoWin(interaction.user.id, netWin, true);
       }
 
       const embed = new EmbedBuilder()
@@ -112,7 +113,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
     } else {
       // Kaybetti (bahis zaten çıkarıldı)
       const embed = new EmbedBuilder()
@@ -126,7 +127,7 @@ module.exports = {
         .setFooter({ text: 'Şansını tekrar dene!' })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
     }
   },
 };

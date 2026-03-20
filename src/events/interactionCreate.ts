@@ -344,6 +344,10 @@ module.exports = {
       if (interaction.customId.startsWith('mines_')) {
         return handleMinesButtons(interaction);
       }
+      if (interaction.customId.startsWith('coinflip_')) {
+        const { handleCoinflipButton } = await import('../services/casinoHandlers');
+        return handleCoinflipButton(interaction);
+      }
 
       // RPG Combat buttons
       if (interaction.customId.startsWith('combat_')) {

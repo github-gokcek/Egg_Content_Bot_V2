@@ -12,7 +12,7 @@ module.exports = {
         .addChoices(
           { name: '👑 Custom Title', value: 'custom_title' },
           { name: '⬇️ Derank', value: 'derank' },
-          { name: '⬆️ Uprank', value: 'uprank' }
+          { name: '🎭 Sticker Ekleme', value: 'sticker_add' }
         ))
     .addStringOption(option =>
       option.setName('mesaj')
@@ -43,6 +43,23 @@ module.exports = {
 
     const emoji = this.getItemEmoji(itemType);
     
+    // Sticker ekleme için özel mesaj
+    if (itemType === 'sticker_add') {
+      const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('🎭 Sticker Ekleme İsteği')
+        .setDescription(
+          `<@${interaction.user.id}> **sticker ekleme** isteği oluşturdu!\n\n` +
+          `💬 **Mesaj:** ${message}\n\n` +
+          `*En kısa sürede bir admin sizinle ilgilenecektir.*`
+        )
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .setFooter({ text: 'Adminler sticker’ı manuel olarak ekleyecektir.' })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed] });
+    }
+    
     // Public announcement
     const embed = new EmbedBuilder()
       .setColor(0xe74c3c)
@@ -63,7 +80,7 @@ module.exports = {
     const emojis: Record<string, string> = {
       'custom_title': '👑',
       'derank': '⬇️',
-      'uprank': '⬆️',
+      'sticker_add': '🎭',
       'pin': '📌',
       'trashtalk': '💬'
     };

@@ -5,7 +5,7 @@ import { Logger } from '../utils/logger';
 export interface InventoryItem {
   id: string;
   name: string;
-  type: 'custom_title' | 'derank' | 'uprank' | 'pin' | 'trashtalk';
+  type: 'custom_title' | 'derank' | 'private_room' | 'sticker_add' | 'pin' | 'trashtalk';
   acquiredAt: string;
   used: boolean;
   usedAt?: string;
@@ -20,7 +20,8 @@ export interface UserInventory {
 export const MARKET_ITEMS = [
   { id: 'custom_title', name: 'Custom Title', price: 5000, description: 'Özel bir unvan al', emoji: '👑' },
   { id: 'derank', name: 'Derank', price: 1000, description: 'Birisinin yetkisini 1 gün düşür', emoji: '⬇️' },
-  { id: 'uprank', name: 'Uprank', price: 3000, description: 'Kalıcı olarak 1 yetki yukarı çık', emoji: '⬆️' },
+  { id: 'private_room', name: 'Özel Oda', price: 5000, description: 'Kendine özel 5 kişilik ses odası aç', emoji: '🚪' },
+  { id: 'sticker_add', name: 'Sticker Ekleme', price: 2000, description: 'Sunucuya özel sticker ekle (admin onayı)', emoji: '🎭' },
   { id: 'pin', name: 'Pin', price: 500, description: 'Bir mesajı sabitle', emoji: '📌' },
   { id: 'trashtalk', name: 'Trashtalk', price: 100, description: 'Birine trashtalk at', emoji: '💬' },
 ];

@@ -23,8 +23,7 @@ export interface UserQuests {
   specialQuest?: Quest; // Özel görev (günlük görevler tamamlandıktan sonra)
   allDailyCompleted: boolean; // Tüm günlük görevler tamamlandı mı
   messageCount: number;
-  voiceMinutes: number;
-  voicePackets: number; // Ses paketleri (her 5 dakika = 1 paket)
+  voiceMinutes: number; // Toplam ses dakikası
   reactionsGiven: number;
   reactionsReceived: Map<string, number>; // messageId -> count
   mentionedUsers: Set<string>;
@@ -95,9 +94,9 @@ const CASINO_QUESTS = [
 // 🔊 Ses Görevleri
 const VOICE_QUESTS = [
   { id: 'voice_5min', emoji: '🎤', name: 'Ses Denemesi', description: 'Sesli kanala katıl ve 5 dakika kal', reward: 20, target: 1, category: 'voice', type: 'voice_5min' },
-  { id: 'voice_15min', emoji: '🎤', name: 'Ses Sohbeti', description: 'Sesli kanala katıl ve 15 dakika kal', reward: 40, target: 3, category: 'voice', type: 'voice_packets' },
-  { id: 'voice_30min', emoji: '🎤', name: 'Uzun Sohbet', description: 'Sesli kanala katıl ve 30 dakika kal', reward: 70, target: 6, category: 'voice', type: 'voice_packets' },
-  { id: 'voice_1hour', emoji: '🎤', name: 'Ses Maratonu', description: 'Sesli kanalda 1 saat geçir', reward: 120, target: 12, category: 'voice', type: 'voice_packets' },
+  { id: 'voice_15min', emoji: '🎤', name: 'Ses Sohbeti', description: 'Sesli kanala katıl ve 15 dakika kal', reward: 40, target: 1, category: 'voice', type: 'voice_15min' },
+  { id: 'voice_30min', emoji: '🎤', name: 'Uzun Sohbet', description: 'Sesli kanala katıl ve 30 dakika kal', reward: 70, target: 1, category: 'voice', type: 'voice_30min' },
+  { id: 'voice_1hour', emoji: '🎤', name: 'Ses Maratonu', description: 'Sesli kanalda 1 saat geçir', reward: 120, target: 1, category: 'voice', type: 'voice_1hour' },
 ];
 
 // 📊 Bonus Görevleri
@@ -111,7 +110,7 @@ const BONUS_QUESTS = [
 const SPECIAL_QUESTS = [
   { id: 'special_200msg', emoji: '🏆', name: 'Mesaj Şampiyonu', description: '200 mesaj gönder', reward: 200, target: 200, category: 'special', type: 'message_count' },
   { id: 'special_500bet', emoji: '🏆', name: 'Yüksek Bahisçi', description: '500 coin bahis yap (toplam)', reward: 150, target: 500, category: 'special', type: 'casino_spent' },
-  { id: 'special_2hour_voice', emoji: '🏆', name: 'Ses Kralı', description: 'Sesli kanalda 2 saat kal', reward: 250, target: 24, category: 'special', type: 'voice_packets' },
+  { id: 'special_2hour_voice', emoji: '🏆', name: 'Ses Kralı', description: 'Sesli kanalda 2 saat kal', reward: 250, target: 1, category: 'special', type: 'voice_2hour' },
   { id: 'special_10replies', emoji: '🏆', name: 'Sosyal Uzman', description: '10 farklı kişiye yanıt ver', reward: 180, target: 10, category: 'special', type: 'replies' },
   { id: 'special_slot_50', emoji: '🏆', name: 'Slot Makinesi', description: 'Slot makinesinde 50 kez oyna', reward: 200, target: 50, category: 'special', type: 'slot_plays' },
   { id: 'special_bj_10', emoji: '🏆', name: 'Blackjack Pro', description: 'Blackjack\'te 10 el oyna', reward: 180, target: 10, category: 'special', type: 'blackjack_plays' },
@@ -144,7 +143,6 @@ class QuestService {
         allDailyCompleted: data.allDailyCompleted || false,
         messageCount: data.messageCount || 0,
         voiceMinutes: data.voiceMinutes || 0,
-        voicePackets: data.voicePackets || 0,
         reactionsGiven: data.reactionsGiven || 0,
         reactionsReceived: new Map(Object.entries(data.reactionsReceived || {})),
         mentionedUsers: new Set(data.mentionedUsers || []),
@@ -206,7 +204,6 @@ class QuestService {
       allDailyCompleted: false,
       messageCount: 0,
       voiceMinutes: 0,
-      voicePackets: 0,
       reactionsGiven: 0,
       reactionsReceived: new Map(),
       mentionedUsers: new Set(),
@@ -259,7 +256,6 @@ class QuestService {
         allDailyCompleted: userQuests.allDailyCompleted || false,
         messageCount: userQuests.messageCount || 0,
         voiceMinutes: userQuests.voiceMinutes || 0,
-        voicePackets: userQuests.voicePackets || 0,
         reactionsGiven: userQuests.reactionsGiven || 0,
         reactionsReceived: Object.fromEntries(userQuests.reactionsReceived || new Map()),
         mentionedUsers: Array.from(userQuests.mentionedUsers || []),
@@ -436,15 +432,12 @@ class QuestService {
       if (!userQuests) return;
     }
     
-    userQuests.voiceMinutes += minutes;
-    // Her 5 dakika = 1 paket
-    userQuests.voicePackets = Math.floor(userQuests.voiceMinutes / 5);
+    // Toplam dakikayı direkt set et (increment değil)
+    userQuests.voiceMinutes = minutes;
 
     Logger.info('Voice tracked', { 
       userId, 
-      minutes, 
-      totalMinutes: userQuests.voiceMinutes, 
-      packets: userQuests.voicePackets 
+      totalMinutes: userQuests.voiceMinutes
     });
 
     await this.updateQuestProgress(userQuests);
@@ -897,26 +890,24 @@ class QuestService {
           quest.progress = userQuests.biggestSingleWin;
           break;
         case 'voice_5min':
-          // 5 dakika = 1 paket, en az 1 paket gerekli
-          quest.progress = userQuests.voicePackets >= 1 ? 1 : 0;
-          Logger.info('Voice 5min quest check', { 
-            userId: userQuests.userId, 
-            packets: userQuests.voicePackets, 
-            progress: quest.progress,
-            target: quest.target
-          });
+          // 5 dakika
+          quest.progress = userQuests.voiceMinutes >= 5 ? 1 : 0;
           break;
-        case 'voice_packets':
-          quest.progress = userQuests.voicePackets;
-          Logger.info('Voice packets quest check', { 
-            userId: userQuests.userId, 
-            packets: userQuests.voicePackets, 
-            progress: quest.progress,
-            target: quest.target
-          });
+        case 'voice_15min':
+          // 15 dakika
+          quest.progress = userQuests.voiceMinutes >= 15 ? 1 : 0;
+          break;
+        case 'voice_30min':
+          // 30 dakika
+          quest.progress = userQuests.voiceMinutes >= 30 ? 1 : 0;
+          break;
+        case 'voice_1hour':
+          // 60 dakika
+          quest.progress = userQuests.voiceMinutes >= 60 ? 1 : 0;
           break;
         case 'voice_message_combo':
-          quest.progress = (userQuests.voicePackets >= 2 && userQuests.messageCount >= 5) ? 1 : 0;
+          // 10 dakika ses + 5 mesaj
+          quest.progress = (userQuests.voiceMinutes >= 10 && userQuests.messageCount >= 5) ? 1 : 0;
           break;
         case 'hourly_messages':
           quest.progress = userQuests.hourlyMessages.size;
@@ -948,8 +939,9 @@ class QuestService {
         case 'casino_spent':
           special.progress = userQuests.casinoSpent;
           break;
-        case 'voice_packets':
-          special.progress = userQuests.voicePackets;
+        case 'voice_2hour':
+          // 120 dakika
+          special.progress = userQuests.voiceMinutes >= 120 ? 1 : 0;
           break;
         case 'replies':
           special.progress = userQuests.repliedToUsers.size;

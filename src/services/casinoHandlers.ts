@@ -2,6 +2,62 @@ import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butto
 import { databaseService } from '../services/databaseService';
 import { db } from '../services/firebase';
 import { doc, getDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { autoDeleteMessage } from '../utils/messageCleanup';
+import { questService } from './questService';
+
+// Blackjack handler
+export async function handleCoinflipButton(interaction: ButtonInteraction) {
+  const [action, choice, amountStr] = interaction.customId.split('_');
+  const amount = parseInt(amountStr);
+  
+  const player = await databaseService.getPlayer(interaction.user.id);
+  if (!player) {
+    return interaction.reply({ content: '❌ Kayıt bulunamadı!', ephemeral: true });
+  }
+
+  // Ev avantajı: %60 bot kazanır
+  const houseWins = Math.random() < 0.60;
+  let result: string;
+  
+  if (houseWins) {
+    result = choice === 'heads' ? 'tails' : 'heads';
+  } else {
+    result = choice;
+  }
+
+  const resultText = result === 'heads' ? '🪙 Yazı' : '🪙 Tura';
+  const won = result === choice;
+
+  if (won) {
+    player.balance += amount * 2;
+    await databaseService.updatePlayer(player);
+    await questService.trackCasinoWin(interaction.user.id, amount, true);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x00ff00)
+      .setTitle('🎉 Coinflip - Kazandın!')
+      .setDescription(`**Sonuç:** ${resultText}`)
+      .addFields(
+        { name: '💰 Kazanç', value: `+${amount} 🪙`, inline: true },
+        { name: '💳 Yeni Bakiye', value: `${player.balance} 🪙`, inline: true }
+      )
+      .setTimestamp();
+
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
+  } else {
+    const embed = new EmbedBuilder()
+      .setColor(0xff0000)
+      .setTitle('💸 Coinflip - Kaybettin!')
+      .setDescription(`**Sonuç:** ${resultText}`)
+      .addFields(
+        { name: '💸 Kayıp', value: `-${amount} 🪙`, inline: true },
+        { name: '💳 Yeni Bakiye', value: `${player.balance} 🪙`, inline: true }
+      )
+      .setTimestamp();
+
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
+  }
+}
 
 // Blackjack handler
 export async function handleBlackjackButtons(interaction: ButtonInteraction) {
@@ -40,7 +96,7 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
         )
         .setTimestamp();
 
-      return interaction.update({ embeds: [embed], components: [] });
+      return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
     }
 
     // Oyun devam ediyor
@@ -109,7 +165,7 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
       )
       .setTimestamp();
 
-    return interaction.update({ embeds: [embed], components: [] });
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
   }
 
   else if (interaction.customId === 'blackjack_double') {
@@ -184,7 +240,7 @@ export async function handleBlackjackButtons(interaction: ButtonInteraction) {
       )
       .setTimestamp();
 
-    return interaction.update({ embeds: [embed], components: [] });
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
   }
 }
 
@@ -258,7 +314,7 @@ export async function handleCrashCashout(interaction: ButtonInteraction) {
     .setFooter({ text: `Crash point: ${game.crashPoint.toFixed(2)}x` })
     .setTimestamp();
 
-  return interaction.update({ embeds: [embed], components: [] });
+  return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
 }
 
 // Mines handler
@@ -303,7 +359,7 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
       )
       .setTimestamp();
 
-    return interaction.update({ embeds: [embed], components: [] });
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
   }
 
   // Mine tile click
@@ -338,7 +394,7 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
       )
       .setTimestamp();
 
-    return interaction.update({ embeds: [embed], components: [] });
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
   }
 
   // Safe tile
@@ -379,7 +435,7 @@ export async function handleMinesButtons(interaction: ButtonInteraction) {
       )
       .setTimestamp();
 
-    return interaction.update({ embeds: [embed], components: [] });
+    return interaction.update({ embeds: [embed], components: [] }).then(msg => autoDeleteMessage(msg));
   }
 
   await setDoc(doc(db, 'minesGames', interaction.user.id), game);

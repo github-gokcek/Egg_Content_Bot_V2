@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface BotSettings {
   adChannelId?: string;
+  adTimerMinutes?: number;
 }
 
 const SETTINGS_DOC = 'botSettings/config';
@@ -22,4 +23,21 @@ export async function getAdChannel(): Promise<string | null> {
 export async function setAdChannel(channelId: string): Promise<void> {
   const docRef = doc(db, SETTINGS_DOC);
   await setDoc(docRef, { adChannelId: channelId }, { merge: true });
+}
+
+export async function getAdTimer(): Promise<number> {
+  const docRef = doc(db, SETTINGS_DOC);
+  const docSnap = await getDoc(docRef);
+  
+  if (docSnap.exists()) {
+    const data = docSnap.data() as BotSettings;
+    return data.adTimerMinutes || 30;
+  }
+  
+  return 30;
+}
+
+export async function setAdTimer(minutes: number): Promise<void> {
+  const docRef = doc(db, SETTINGS_DOC);
+  await setDoc(docRef, { adTimerMinutes: minutes }, { merge: true });
 }

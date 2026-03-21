@@ -7,7 +7,7 @@ import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
 import { voiceCoinService } from './services/voiceCoinService';
 import { patchNotesService } from './services/patchNotesService';
-import { getAdChannel } from './services/botSettings';
+import { getAdChannel, getAdTimer } from './services/botSettings';
 import { EmbedBuilder, AttachmentBuilder } from 'discord.js';
 import path from 'path';
 const { checkReminders } = require('./commands/hatirlat');
@@ -63,43 +63,48 @@ client.once('ready', (client) => {
     await checkReminders(client);
   }, 60 * 1000);
   
-  // Reklam mesajı (her 30 dakika)
-  setInterval(async () => {
-    const adChannelId = await getAdChannel();
-    if (adChannelId) {
-      try {
-        const channel = await client.channels.fetch(adChannelId);
-        if (channel && channel.isTextBased()) {
-          const imagePath = path.join(process.cwd(), 'assetler', 'Ninja.png');
-          
-          // Görsel dosyası kontrolü
-          if (!existsSync(imagePath)) {
-            Logger.error('Reklam görseli bulunamadı: assetler/Ninja.png');
-            return;
+  // Reklam mesajı (dinamik aralık)
+  const startAdScheduler = async () => {
+    const timerMinutes = await getAdTimer();
+    setInterval(async () => {
+      const adChannelId = await getAdChannel();
+      if (adChannelId) {
+        try {
+          const channel = await client.channels.fetch(adChannelId);
+          if (channel && channel.isTextBased()) {
+            const imagePath = path.join(process.cwd(), 'assetler', 'Ninja.png');
+            
+            if (!existsSync(imagePath)) {
+              Logger.error('Reklam görseli bulunamadı: assetler/Ninja.png');
+              return;
+            }
+            
+            const attachment = new AttachmentBuilder(imagePath);
+            
+            const embed = new EmbedBuilder()
+              .setColor(0x9b59b6)
+              .setTitle('🎮 Botun Tüm Özelliklerini Keşfet!')
+              .setDescription(
+                '**Casino sistemini** denediniz mi? 🎰\n' +
+                '**RPG maceralarına** katıldınız mı? ⚔️\n' +
+                '**Günlük görevlerinizi** tamamladınız mı? 📋\n\n' +
+                '**Komutları keşfet:** `/yardim`'
+              )
+              .setImage('attachment://Ninja.png')
+              .setTimestamp();
+            
+            await channel.send({ embeds: [embed], files: [attachment] });
+            Logger.info('Reklam mesajı gönderildi');
           }
-          
-          const attachment = new AttachmentBuilder(imagePath);
-          
-          const embed = new EmbedBuilder()
-            .setColor(0x9b59b6)
-            .setTitle('🎮 Botun Tüm Özelliklerini Keşfet!')
-            .setDescription(
-              '**Casino sistemini** denediniz mi? 🎰\n' +
-              '**RPG maceralarına** katıldınız mı? ⚔️\n' +
-              '**Günlük görevlerinizi** tamamladınız mı? 📋\n\n' +
-              '**Komutları keşfet:** `/yardim`'
-            )
-            .setImage('attachment://Ninja.png')
-            .setTimestamp();
-          
-          await channel.send({ embeds: [embed], files: [attachment] });
-          Logger.info('Reklam mesajı gönderildi');
+        } catch (error) {
+          Logger.error('Reklam mesajı gönderilemedi:', error);
         }
-      } catch (error) {
-        Logger.error('Reklam mesajı gönderilemedi:', error);
       }
-    }
-  }, 30 * 60 * 1000); // 30 dakika
+    }, timerMinutes * 60 * 1000);
+    Logger.info(`Reklam sistemi ${timerMinutes} dakika aralıkla başlatıldı`);
+  };
+  
+  startAdScheduler();
   
   // Günlük reset (her gece 00:00)
   const scheduleDailyReset = () => {

@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, PermissionFlagsBits, ChannelType, EmbedBuilder } from 'discord.js';
 import { configService } from '../services/configService';
-import { setAdChannel } from '../services/botSettings';
+import { setAdChannel, setAdTimer } from '../services/botSettings';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -84,6 +84,18 @@ module.exports = {
             .addChannelTypes(ChannelType.GuildText)
             .setRequired(true)
         )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('timer')
+        .setDescription('Reklam aralığını ayarla (dakika)')
+        .addIntegerOption(option =>
+          option.setName('dakika')
+            .setDescription('Reklam aralığı (30-180 dakika)')
+            .setMinValue(30)
+            .setMaxValue(180)
+            .setRequired(true)
+        )
     ),
   async execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guildId) {
@@ -136,6 +148,16 @@ module.exports = {
       await setAdChannel(channel.id);
       await interaction.reply({ 
         content: `✅ Reklam kanalı <#${channel.id}> olarak ayarlandı!`,
+        ephemeral: true 
+      });
+      return;
+    }
+
+    if (subcommand === 'timer') {
+      const minutes = interaction.options.getInteger('dakika', true);
+      await setAdTimer(minutes);
+      await interaction.reply({ 
+        content: `✅ Reklam aralığı ${minutes} dakika olarak ayarlandı! Değişiklik bir sonraki reklamdan itibaren geçerli olacak.`,
         ephemeral: true 
       });
       return;

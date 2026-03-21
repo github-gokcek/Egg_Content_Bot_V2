@@ -60,19 +60,25 @@ class ScreenshotService {
      * U.GG counter sayfasından ekran görüntüsü çek
      */
     async captureCounterPage(championId) {
-        return this.captureUGGPage(`https://u.gg/lol/champions/${championId.toLowerCase()}/counter`, championId, 'counter');
+        return this.captureUGGPage(`https://u.gg/lol/champions/${championId.toLowerCase()}/counter`, championId, 'counter', 0);
+    }
+    /**
+     * U.GG build sayfasından ekran görüntüsü çek
+     */
+    async captureBuildPage(championId) {
+        return this.captureUGGPage(`https://u.gg/lol/champions/${championId.toLowerCase()}/build`, championId, 'build', 1080);
     }
     /**
      * U.GG matchup sayfasından ekran görüntüsü çek
      */
     async captureMatchupPage(championId1, championId2) {
-        const url = `https://u.gg/lol/champions/${championId1.toLowerCase()}/matchups/${championId2.toLowerCase()}`;
-        return this.captureUGGPage(url, `${championId1}_vs_${championId2}`, 'matchup');
+        const url = `https://u.gg/lol/champions/${championId1.toLowerCase()}/build?opp=${championId2.toLowerCase()}`;
+        return this.captureUGGPage(url, `${championId1}_vs_${championId2}`, 'matchup', 0);
     }
     /**
      * U.GG sayfasından ekran görüntüsü çek (genel)
      */
-    async captureUGGPage(url, filename, type) {
+    async captureUGGPage(url, filename, type, scrollAmount = 0) {
         let browser;
         try {
             const screenshotPath = path.join(this.screenshotDir, `${filename}_${type}.png`);
@@ -103,6 +109,14 @@ class ScreenshotService {
             }
             // Sayfanın yüklenmesini bekle
             await new Promise(resolve => setTimeout(resolve, 3000));
+            // Eğer scroll gerekiyorsa (build sayfası için)
+            if (scrollAmount > 0) {
+                await page.evaluate((scroll) => {
+                    window.scrollBy(0, scroll);
+                }, scrollAmount);
+                // Scroll sonrası bekle
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
             // Counter/Matchup tablosunun yüklenmesini bekle
             try {
                 await page.waitForSelector('.counter-list, .counters-table, .matchup-table, [class*="counter"], [class*="matchup"], main', { timeout: 15000 });
@@ -111,7 +125,7 @@ class ScreenshotService {
                 logger_1.Logger.warn('[Screenshot] Selector bulunamadı, tüm sayfa screenshot alınacak');
             }
             // Biraz bekle (animasyonlar ve lazy loading için)
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
             // Sadece ilgili bölümün ekran görüntüsünü al
             const element = await page.$('.counter-list, .counters-table, .matchup-table, main');
             if (element) {

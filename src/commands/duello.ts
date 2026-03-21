@@ -431,7 +431,7 @@ async function handleDuelloButton(interaction: any) {
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [resultEmbed] });
+    await interaction.update({ embeds: [resultEmbed], components: [] });
     Logger.success('Duello tamamlandı', { gameId, winner, amount: game.amount });
   } else if (customId.startsWith('duello_reject_')) {
     const gameId = customId.replace('duello_reject_', '');
@@ -464,6 +464,6 @@ async function handleDuelloButton(interaction: any) {
       .setDescription(`${interaction.user.username} duellonuzu reddetti.`)
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.update({ embeds: [embed], components: [] });
   }
 }

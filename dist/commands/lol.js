@@ -293,43 +293,58 @@ async function handleMastery(interaction, puuid, summoner, account) {
 }
 async function handleBuild(interaction, championName) {
     try {
-        const buildData = await championDataService_1.championDataService.getBuild(championName);
-        const champion = buildData.champion;
+        const champion = championDataService_1.championDataService.findChampion(championName);
         if (!champion) {
             await interaction.editReply({ content: `❌ Şampiyon bulunamadı: ${championName}` });
             return;
         }
-        // Item isimlerini al
-        let itemBuild = 'Veri yok';
-        if (buildData.items && buildData.items.length > 0) {
-            itemBuild = buildData.items
-                .map((id) => championDataService_1.championDataService.getItemName(id))
-                .join(' → ');
-        }
-        else if (buildData.itemNames) {
-            itemBuild = buildData.itemNames.join(' → ');
-        }
-        // Rune ismini al
-        let runeSetup = 'Veri yok';
-        if (buildData.rune) {
-            if (typeof buildData.rune === 'number') {
-                runeSetup = `**Ana:** ${championDataService_1.championDataService.getRuneName(buildData.rune)}`;
+        const championId = champion.id.toLowerCase();
+        const uggUrl = `https://u.gg/lol/champions/${championId}/build`;
+        // Önce hızlıca loading mesajı gönder
+        const loadingEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(0x00d4aa)
+            .setTitle('📸 Build Bilgileri Yükleniyor...')
+            .setDescription('U.GG sayfasından build bilgileri alınıyor, lütfen bekleyin...\n\n⏱️ Bu işlem 10-30 saniye sürebilir.');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        // Ekran görüntüsü çek
+        try {
+            const screenshotPath = await screenshotService_1.screenshotService.captureBuildPage(championId);
+            if (screenshotPath) {
+                const attachment = new discord_js_1.AttachmentBuilder(screenshotPath);
+                const embed = new discord_js_1.EmbedBuilder()
+                    .setColor(0x00d4aa)
+                    .setTitle(`🛠️ ${champion.name} Build (Patch 14.24)`)
+                    .setDescription(`🔗 [Detaylı Build Analizi için U.GG'ye Git](${uggUrl})`)
+                    .setImage(`attachment://${championId}_build.png`)
+                    .setFooter({ text: 'U.GG - Platinum+ Verileri' })
+                    .setTimestamp();
+                await interaction.editReply({ embeds: [embed], files: [attachment] });
+                return;
             }
-            else {
-                runeSetup = `**Ana:** ${buildData.rune}`;
-            }
         }
+        catch (screenshotError) {
+            logger_1.Logger.error('Screenshot hatası:', screenshotError);
+        }
+        // Screenshot başarısız olursa sadece linki göster
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0x00d4aa)
-            .setTitle(`🛠️ ${champion.name || champion.id} Build (Patch 14.24)`)
+            .setTitle(`🛠️ ${champion.name} Build`)
             .setThumbnail(`${DDRAGON_BASE}/img/champion/${champion.id}.png`)
-            .addFields({ name: '📊 İstatistikler', value: `Win Rate: **${buildData.stats.winRate}%**\nPick Rate: **${buildData.stats.pickRate}%**`, inline: false }, { name: '🎯 Item Build', value: itemBuild, inline: false }, { name: '🔮 Runes', value: runeSetup, inline: false })
-            .setFooter({ text: `Veri: ${buildData.source || 'U.GG'} (Platinum+)` })
+            .setDescription(`**${champion.name}** için build bilgilerini görmek için:\n\n` +
+            `🔗 [U.GG Build Sayfası](${uggUrl})\n\n` +
+            `⚠️ Ekran görüntüsü alınamadı.`)
+            .setFooter({ text: 'U.GG - Platinum+ Verileri' })
             .setTimestamp();
         await interaction.editReply({ embeds: [embed] });
     }
     catch (error) {
-        await interaction.editReply({ content: `❌ ${error.message}` });
+        logger_1.Logger.error('Build komut hatası:', error);
+        try {
+            await interaction.editReply({ content: `❌ ${error.message}` });
+        }
+        catch (e) {
+            logger_1.Logger.error('Hata mesajı gönderilemedi:', e);
+        }
     }
 }
 async function handleCounter(interaction, championName) {
@@ -402,7 +417,7 @@ async function handleMatchup(interaction, champ1Name, champ2Name) {
         }
         const championId1 = champion1.id.toLowerCase();
         const championId2 = champion2.id.toLowerCase();
-        const uggUrl = `https://u.gg/lol/champions/${championId1}/matchups/${championId2}`;
+        const uggUrl = `https://u.gg/lol/champions/${championId1}/build?opp=${championId2}`;
         // Önce hızlıca loading mesajı gönder
         const loadingEmbed = new discord_js_1.EmbedBuilder()
             .setColor(0xffa500)

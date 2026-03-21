@@ -322,7 +322,7 @@ async function handleDuelloButton(interaction) {
             .setDescription(`**${winnerUser?.username || 'Bilinmeyen'}** kazandı!`)
             .addFields({ name: '🎮 Oyun Modu', value: game.mode === 'coinflip' ? '🪙 Yazı Tura' : '🎰 Slot', inline: true }, { name: '📊 Sonuç', value: result, inline: true }, { name: '💰 Bahis Miktarı', value: `${game.amount} 🪙`, inline: true }, { name: '🏆 Kazanan', value: `${winnerUser?.username || 'Bilinmeyen'} +${winnerReward} 🪙`, inline: true }, { name: '😢 Kaybeden', value: `${loserUser?.username || 'Bilinmeyen'} -${game.amount} 🪙`, inline: true }, { name: '🔥 Sistem Kesintisi', value: `${game.amount - winnerReward} 🪙`, inline: true })
             .setTimestamp();
-        await interaction.reply({ embeds: [resultEmbed] });
+        await interaction.update({ embeds: [resultEmbed], components: [] });
         logger_1.Logger.success('Duello tamamlandı', { gameId, winner, amount: game.amount });
     }
     else if (customId.startsWith('duello_reject_')) {
@@ -350,6 +350,6 @@ async function handleDuelloButton(interaction) {
             .setTitle('❌ Duello Reddedildi')
             .setDescription(`${interaction.user.username} duellonuzu reddetti.`)
             .setTimestamp();
-        await interaction.reply({ embeds: [embed] });
+        await interaction.update({ embeds: [embed], components: [] });
     }
 }

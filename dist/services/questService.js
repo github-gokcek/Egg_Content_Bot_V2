@@ -187,10 +187,11 @@ class QuestService {
     }
     async saveUserQuests(userQuests) {
         try {
-            // Son kayıttan 5 saniye geçmemişse kaydetme (debounce - Firebase quota için)
+            // DEBOUNCE KALDIRILDI - Her tracking önemli!
+            // Son kayıttan 1 saniye geçmemişse kaydetme (sadece spam önleme)
             const now = Date.now();
-            if (now - userQuests.lastSaveTime < 5000) {
-                logger_1.Logger.info('Skipping save (debounce)', { userId: userQuests.userId });
+            if (now - userQuests.lastSaveTime < 1000) {
+                logger_1.Logger.info('Skipping save (spam prevention)', { userId: userQuests.userId });
                 return;
             }
             // Undefined değerleri temizle
@@ -309,19 +310,34 @@ class QuestService {
         userQuests.fastMessageTimestamps.push(now);
         // Sadece son 3 saati tut
         userQuests.fastMessageTimestamps = userQuests.fastMessageTimestamps.filter(ts => now - ts <= 3 * 60 * 60 * 1000);
-        // Mention takibi
-        if (message.mentions?.users) {
+        // Mention takibi - DÜZELTİLMİŞ
+        if (message.mentions?.users && message.mentions.users.size > 0) {
             message.mentions.users.forEach((user) => {
                 if (user.id !== userId && !user.bot) {
                     userQuests.mentionedUsers.add(user.id);
+                    logger_1.Logger.info('Mention tracked', {
+                        userId,
+                        mentionedUserId: user.id,
+                        totalMentions: userQuests.mentionedUsers.size
+                    });
                 }
             });
         }
-        // Reply tracking
+        // Reply tracking - DÜZELTİLMİŞ
         if (message.reference?.messageId) {
-            const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-            if (repliedMessage && repliedMessage.author.id !== userId) {
-                userQuests.repliedToUsers.add(repliedMessage.author.id);
+            try {
+                const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+                if (repliedMessage && repliedMessage.author.id !== userId && !repliedMessage.author.bot) {
+                    userQuests.repliedToUsers.add(repliedMessage.author.id);
+                    logger_1.Logger.info('Reply tracked', {
+                        userId,
+                        repliedToUserId: repliedMessage.author.id,
+                        totalReplies: userQuests.repliedToUsers.size
+                    });
+                }
+            }
+            catch (error) {
+                logger_1.Logger.error('Reply tracking error', error);
             }
         }
         // Geliştirilmiş Emoji takibi - TÜM emojiler
@@ -357,8 +373,16 @@ class QuestService {
             if (!userQuests)
                 return;
         }
-        // Toplam dakikayı direkt set et (increment değil)
-        userQuests.voiceMinutes = minutes;
+        // CRITICAL FIX: Toplam dakikayı direkt set et (voiceActivityService zaten toplamı gönderiyor)
+        // Ama eğer yeni değer eskisinden küçükse (reset olmuş olabilir), increment yap
+        if (minutes < userQuests.voiceMinutes) {
+            // Reset olmuş, yeni session başlamış
+            userQuests.voiceMinutes = minutes;
+        }
+        else {
+            // Normal durum, toplamı güncelle
+            userQuests.voiceMinutes = minutes;
+        }
         logger_1.Logger.info('Voice tracked', {
             userId,
             totalMinutes: userQuests.voiceMinutes

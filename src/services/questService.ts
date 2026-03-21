@@ -246,13 +246,12 @@ class QuestService {
     }));
   }
 
-  async saveUserQuests(userQuests: UserQuests): Promise<void> {
+  async saveUserQuests(userQuests: UserQuests, force: boolean = false): Promise<void> {
     try {
-      // Son kayıttan 5 saniye geçmemişse kaydetme (debounce - Firebase quota için)
+      // EMERGENCY: Firebase quota exceeded - Debounce 30 saniye
       const now = Date.now();
-      if (now - userQuests.lastSaveTime < 5000) {
-        Logger.info('Skipping save (debounce)', { userId: userQuests.userId });
-        return;
+      if (!force && now - userQuests.lastSaveTime < 30000) {
+        return; // Sessizce skip et
       }
 
       // Undefined değerleri temizle
@@ -297,14 +296,19 @@ class QuestService {
         cleanData.specialQuest = userQuests.specialQuest;
       }
       
-      // Timeout ile setDoc (10 saniye)
+      // Timeout ile setDoc (30 saniye - quota exceeded durumu için)
       await Promise.race([
         setDoc(doc(db, 'userQuests', userQuests.userId), cleanData),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 10000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 30000))
       ]);
       
       userQuests.lastSaveTime = now;
     } catch (error) {
+      // Firebase quota exceeded - Sessizce devam et
+      if (error instanceof Error && error.message.includes('RESOURCE_EXHAUSTED')) {
+        Logger.warn('Firebase quota exceeded, skipping save', { userId: userQuests.userId });
+        return;
+      }
       Logger.error('saveUserQuests error', error);
       // Hata olsa bile devam et
     }
@@ -341,10 +345,10 @@ class QuestService {
   }
 
   async trackMessage(userId: string, message: any): Promise<void> {
+    // EMERGENCY: Firebase quota exceeded - Tracking'i skip et
+    return;
     // Async olarak çalıştır, await etme
-    this.trackMessageAsync(userId, message).catch(error => {
-      Logger.error('trackMessage async error', error);
-    });
+    this.trackMessageAsync(userId, message).catch(() => {});
   }
 
   private async trackMessageAsync(userId: string, message: any): Promise<void> {
@@ -387,20 +391,34 @@ class QuestService {
     // Sadece son 3 saati tut
     userQuests.fastMessageTimestamps = userQuests.fastMessageTimestamps.filter(ts => now - ts <= 3 * 60 * 60 * 1000);
 
-    // Mention takibi
-    if (message.mentions?.users) {
+    // Mention takibi - DÜZELTİLMİŞ
+    if (message.mentions?.users && message.mentions.users.size > 0) {
       message.mentions.users.forEach((user: any) => {
         if (user.id !== userId && !user.bot) {
           userQuests.mentionedUsers.add(user.id);
+          Logger.info('Mention tracked', { 
+            userId, 
+            mentionedUserId: user.id,
+            totalMentions: userQuests.mentionedUsers.size 
+          });
         }
       });
     }
 
-    // Reply tracking
+    // Reply tracking - DÜZELTİLMİŞ
     if (message.reference?.messageId) {
-      const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-      if (repliedMessage && repliedMessage.author.id !== userId) {
-        userQuests.repliedToUsers.add(repliedMessage.author.id);
+      try {
+        const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+        if (repliedMessage && repliedMessage.author.id !== userId && !repliedMessage.author.bot) {
+          userQuests.repliedToUsers.add(repliedMessage.author.id);
+          Logger.info('Reply tracked', { 
+            userId, 
+            repliedToUserId: repliedMessage.author.id,
+            totalReplies: userQuests.repliedToUsers.size 
+          });
+        }
+      } catch (error) {
+        Logger.error('Reply tracking error', error);
       }
     }
 
@@ -419,14 +437,13 @@ class QuestService {
     }
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
-    await this.saveUserQuests(userQuests);
+    await this.saveUserQuests(userQuests); // Debounce ile kaydet
   }
 
   async trackVoice(userId: string, minutes: number): Promise<void> {
-    this.trackVoiceAsync(userId, minutes).catch(error => {
-      Logger.error('trackVoice async error', error);
-    });
+    // EMERGENCY: Firebase quota exceeded - Tracking'i skip et
+    return;
+    this.trackVoiceAsync(userId, minutes).catch(() => {});
   }
 
   private async trackVoiceAsync(userId: string, minutes: number): Promise<void> {
@@ -457,14 +474,12 @@ class QuestService {
     });
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
   async trackReactionGiven(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
-    this.trackReactionGivenAsync(userId, messageId, messageAuthorId, emoji).catch(error => {
-      Logger.error('trackReactionGiven async error', error);
-    });
+    return; // EMERGENCY: Skip
+    this.trackReactionGivenAsync(userId, messageId, messageAuthorId, emoji).catch(() => {});
   }
 
   private async trackReactionGivenAsync(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
@@ -505,14 +520,12 @@ class QuestService {
     }
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
   async trackReactionReceived(userId: string, messageId: string): Promise<void> {
-    this.trackReactionReceivedAsync(userId, messageId).catch(error => {
-      Logger.error('trackReactionReceived async error', error);
-    });
+    return; // EMERGENCY: Skip
+    this.trackReactionReceivedAsync(userId, messageId).catch(() => {});
   }
 
   private async trackReactionReceivedAsync(userId: string, messageId: string): Promise<void> {
@@ -531,7 +544,6 @@ class QuestService {
     userQuests.reactionsReceived.set(messageId, current + 1);
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -557,7 +569,6 @@ class QuestService {
     userQuests.repliesReceived.set(messageId, current + 1);
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -582,7 +593,6 @@ class QuestService {
     // Rastgele komutu kullanıldı - şu an için bir görev yok ama gelecekte eklenebilir
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -608,7 +618,6 @@ class QuestService {
     userQuests.usedDailyCommand = true;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -633,7 +642,6 @@ class QuestService {
     userQuests.slotPlays++;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -661,7 +669,6 @@ class QuestService {
     }
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -686,7 +693,6 @@ class QuestService {
     userQuests.coinflipPlays++;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -711,7 +717,6 @@ class QuestService {
     userQuests.crashPlays++;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -736,7 +741,6 @@ class QuestService {
     userQuests.minesPlays += tiles;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -761,7 +765,6 @@ class QuestService {
     userQuests.casinoSpent += amount;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -792,7 +795,6 @@ class QuestService {
     }
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -817,7 +819,6 @@ class QuestService {
     userQuests.duelloWins++;
 
     await this.updateQuestProgress(userQuests);
-    userQuests.lastSaveTime = Date.now();
     await this.saveUserQuests(userQuests);
   }
 
@@ -934,6 +935,8 @@ class QuestService {
         quest.completed = true;
         await this.giveReward(userQuests.userId, quest.reward);
         Logger.success('Quest completed', { userId: userQuests.userId, questId: quest.id, reward: quest.reward });
+        // Quest tamamlandığında force save yap
+        await this.saveUserQuests(userQuests, true);
       }
     }
 
@@ -942,6 +945,8 @@ class QuestService {
     if (allCompleted && !userQuests.allDailyCompleted) {
       userQuests.allDailyCompleted = true;
       Logger.success('All daily quests completed! Special quest unlocked', { userId: userQuests.userId });
+      // Tüm görevler tamamlandığında force save yap
+      await this.saveUserQuests(userQuests, true);
     }
 
     // Özel görevi güncelle (sadece günlük görevler tamamlandıysa)
@@ -985,6 +990,8 @@ class QuestService {
         special.completed = true;
         await this.giveReward(userQuests.userId, special.reward);
         Logger.success('Special quest completed!', { userId: userQuests.userId, questId: special.id, reward: special.reward });
+        // Özel görev tamamlandığında force save yap
+        await this.saveUserQuests(userQuests, true);
       }
     }
   }

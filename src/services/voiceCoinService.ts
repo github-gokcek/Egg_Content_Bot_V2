@@ -7,27 +7,45 @@ import { Logger } from '../utils/logger';
 interface VoiceCoinSession {
   userId: string;
   joinedAt: Date;
-  lastPacketTime: Date; // Son paket kaydedilme zamanı
-  dailyPackets: number; // Bugün kaç paket aldığı
-  lastResetDate: string; // YYYY-MM-DD formatında
+  lastPacketTime: Date;
+  dailyPackets: number;
+  lastResetDate: string;
 }
 
 class VoiceCoinService {
   private checkInterval: NodeJS.Timeout | null = null;
   private readonly PACKET_DURATION = 5 * 60 * 1000; // 5 dakika
+  private activeSessions: Map<string, VoiceCoinSession> = new Map();
 
   start() {
+    this.loadActiveSessions();
+    
     this.checkInterval = setInterval(() => {
       this.checkSessions();
-    }, 1 * 60 * 1000); // Her 1 dakikada kontrol et (5 dakika paketleri için)
+    }, 1 * 60 * 1000); // Her 1 dakikada kontrol et
     
-    Logger.info('Voice coin tracking başlatıldı (5 dakika paket sistemi)');
+    Logger.info('Voice coin tracking başlatıldı (memory cache ile)');
   }
 
   stop() {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
+    }
+  }
+
+  private async loadActiveSessions() {
+    try {
+      const snapshot = await getDocs(collection(db, 'voiceCoinSessions'));
+      
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data() as VoiceCoinSession;
+        this.activeSessions.set(data.userId, data);
+      }
+      
+      Logger.info('Active voice coin sessions loaded', { count: this.activeSessions.size });
+    } catch (error) {
+      Logger.error('loadActiveSessions error', error);
     }
   }
 
@@ -45,32 +63,26 @@ class VoiceCoinService {
   private async startSession(userId: string) {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = now.toISOString().split('T')[0];
 
-      const existingSession = await getDoc(doc(db, 'voiceCoinSessions', userId));
+      const existingSession = this.activeSessions.get(userId);
       
-      if (existingSession.exists()) {
-        const session = existingSession.data() as VoiceCoinSession;
-        // Eğer aynı gün ise devam et, değilse sıfırla
-        if (session.lastResetDate !== today) {
-          await setDoc(doc(db, 'voiceCoinSessions', userId), {
-            userId,
-            joinedAt: now,
-            lastPacketTime: now,
-            dailyPackets: 0,
-            lastResetDate: today,
-          });
-        }
+      let session: VoiceCoinSession;
+      
+      if (existingSession && existingSession.lastResetDate === today) {
+        session = existingSession;
       } else {
-        const session: VoiceCoinSession = {
+        session = {
           userId,
           joinedAt: now,
           lastPacketTime: now,
           dailyPackets: 0,
           lastResetDate: today,
         };
-        await setDoc(doc(db, 'voiceCoinSessions', userId), session);
       }
+      
+      this.activeSessions.set(userId, session);
+      await setDoc(doc(db, 'voiceCoinSessions', userId), session);
       
       Logger.info('Voice coin session başladı', { userId });
     } catch (error) {
@@ -80,6 +92,7 @@ class VoiceCoinService {
 
   private async endSession(userId: string) {
     try {
+      this.activeSessions.delete(userId);
       await deleteDoc(doc(db, 'voiceCoinSessions', userId));
       Logger.info('Voice coin session bitti', { userId });
     } catch (error) {
@@ -88,31 +101,27 @@ class VoiceCoinService {
   }
 
   private calculateCoinReward(packetCount: number): number {
-    // 1. paket: 40 coin
-    // 2. paket: 20 coin
-    // 3. paket: 10 coin
-    // 4. paket: 5 coin
-    // 5+ paket: 1 coin
-    
     if (packetCount === 1) return 40;
     if (packetCount === 2) return 20;
     if (packetCount === 3) return 10;
     if (packetCount === 4) return 5;
-    return 1; // 5+ pakette hep 1 coin
+    return 1;
   }
 
   private async checkSessions() {
     try {
-      const snapshot = await getDocs(collection(db, 'voiceCoinSessions'));
       const now = new Date();
       const today = now.toISOString().split('T')[0];
       
-      for (const docSnap of snapshot.docs) {
-        const session = docSnap.data() as VoiceCoinSession;
-        const userId = session.userId;
-
+      // Memory'deki aktif sessionları kontrol et (Firebase'den okuma YOK!)
+      for (const [userId, session] of this.activeSessions.entries()) {
         // Gün değişmişse sıfırla
         if (session.lastResetDate !== today) {
+          session.dailyPackets = 0;
+          session.lastResetDate = today;
+          session.lastPacketTime = now;
+          
+          this.activeSessions.set(userId, session);
           await updateDoc(doc(db, 'voiceCoinSessions', userId), {
             dailyPackets: 0,
             lastResetDate: today,
@@ -125,14 +134,11 @@ class VoiceCoinService {
         const timeSinceLastPacket = now.getTime() - new Date(session.lastPacketTime).getTime();
         
         if (timeSinceLastPacket >= this.PACKET_DURATION) {
-          // Kaç paket tamamlandığını hesapla
           const completedPackets = Math.floor(timeSinceLastPacket / this.PACKET_DURATION);
           const newPacketCount = session.dailyPackets + completedPackets;
           
-          // Oyuncuya coin ver
           const player = await databaseService.getPlayer(userId);
           if (player) {
-            // Her paket için coin hesapla
             let totalCoin = 0;
             for (let i = 1; i <= completedPackets; i++) {
               totalCoin += this.calculateCoinReward(session.dailyPackets + i);
@@ -142,6 +148,12 @@ class VoiceCoinService {
             player.voicePackets = (player.voicePackets || 0) + completedPackets;
             await databaseService.updatePlayer(player);
 
+            // Memory'yi güncelle
+            session.lastPacketTime = now;
+            session.dailyPackets = newPacketCount;
+            this.activeSessions.set(userId, session);
+            
+            // Firebase'e kaydet
             await updateDoc(doc(db, 'voiceCoinSessions', userId), {
               lastPacketTime: now,
               dailyPackets: newPacketCount,
@@ -164,15 +176,21 @@ class VoiceCoinService {
 
   async resetDailyCoins() {
     try {
-      const snapshot = await getDocs(collection(db, 'voiceCoinSessions'));
       const today = new Date().toISOString().split('T')[0];
       
-      for (const docSnap of snapshot.docs) {
-        await updateDoc(doc(db, 'voiceCoinSessions', docSnap.id), {
+      // Memory'deki sessionları sıfırla
+      for (const [userId, session] of this.activeSessions.entries()) {
+        session.dailyPackets = 0;
+        session.lastResetDate = today;
+        
+        this.activeSessions.set(userId, session);
+        
+        await updateDoc(doc(db, 'voiceCoinSessions', userId), {
           dailyPackets: 0,
           lastResetDate: today,
         });
       }
+      
       Logger.success('Voice günlük coin paketleri sıfırlandı');
     } catch (error) {
       Logger.error('resetDailyCoins error', error);

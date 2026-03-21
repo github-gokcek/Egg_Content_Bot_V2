@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = require("discord.js");
 const configService_1 = require("../services/configService");
+const botSettings_1 = require("../services/botSettings");
 module.exports = {
     data: new discord_js_1.SlashCommandBuilder()
         .setName('set')
@@ -45,6 +46,21 @@ module.exports = {
         .addChannelOption(option => option.setName('kanal')
         .setDescription('Liderlik kanalı')
         .addChannelTypes(discord_js_1.ChannelType.GuildText)
+        .setRequired(true)))
+        .addSubcommand(subcommand => subcommand
+        .setName('reklam')
+        .setDescription('Reklam kanalını ayarla')
+        .addChannelOption(option => option.setName('kanal')
+        .setDescription('Reklam kanalı')
+        .addChannelTypes(discord_js_1.ChannelType.GuildText)
+        .setRequired(true)))
+        .addSubcommand(subcommand => subcommand
+        .setName('timer')
+        .setDescription('Reklam aralığını ayarla (dakika)')
+        .addIntegerOption(option => option.setName('dakika')
+        .setDescription('Reklam aralığı (30-180 dakika)')
+        .setMinValue(30)
+        .setMaxValue(180)
         .setRequired(true))),
     async execute(interaction) {
         if (!interaction.guildId) {
@@ -78,6 +94,24 @@ module.exports = {
             await configService_1.configService.setLeaderboardChannel(interaction.guildId, channel.id);
             await interaction.reply({
                 content: `✅ Liderlik tablosu kanalı <#${channel.id}> olarak ayarlandı!`,
+                ephemeral: true
+            });
+            return;
+        }
+        if (subcommand === 'reklam') {
+            const channel = interaction.options.getChannel('kanal', true);
+            await (0, botSettings_1.setAdChannel)(channel.id);
+            await interaction.reply({
+                content: `✅ Reklam kanalı <#${channel.id}> olarak ayarlandı!`,
+                ephemeral: true
+            });
+            return;
+        }
+        if (subcommand === 'timer') {
+            const minutes = interaction.options.getInteger('dakika', true);
+            await (0, botSettings_1.setAdTimer)(minutes);
+            await interaction.reply({
+                content: `✅ Reklam aralığı ${minutes} dakika olarak ayarlandı! Değişiklik bir sonraki reklamdan itibaren geçerli olacak.`,
                 ephemeral: true
             });
             return;

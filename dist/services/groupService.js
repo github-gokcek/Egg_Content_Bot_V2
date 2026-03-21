@@ -22,12 +22,22 @@ class GroupService {
     }
     async getGroup(groupId) {
         const docSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(firebase_1.db, 'groups', groupId));
-        return docSnap.exists() ? docSnap.data() : null;
+        if (!docSnap.exists())
+            return null;
+        const data = docSnap.data();
+        return {
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+        };
     }
     async getUserGroup(userId) {
         const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'groups'));
         for (const docSnap of snapshot.docs) {
-            const group = docSnap.data();
+            const data = docSnap.data();
+            const group = {
+                ...data,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+            };
             if (group.members.includes(userId)) {
                 return group;
             }

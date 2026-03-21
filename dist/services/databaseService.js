@@ -135,6 +135,10 @@ class DatabaseService {
                 if (data.balance === undefined || data.balance === null || isNaN(data.balance)) {
                     data.balance = 100;
                 }
+                // voicePackets yoksa 0 olarak ayarla
+                if (data.voicePackets === undefined || data.voicePackets === null) {
+                    data.voicePackets = 0;
+                }
                 // createdAt yoksa şimdi olarak ayarla
                 if (!data.createdAt) {
                     data.createdAt = new Date().toISOString();

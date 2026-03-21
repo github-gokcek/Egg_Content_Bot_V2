@@ -6,13 +6,15 @@ const firestore_1 = require("firebase/firestore");
 const factionService_1 = require("./factionService");
 const faction_1 = require("../types/faction");
 const logger_1 = require("../utils/logger");
+const questService_1 = require("./questService");
 class VoiceActivityService {
     checkInterval = null;
+    CHECK_INTERVAL = 2 * 60 * 1000; // 2 dakika (Firebase quota için)
     start() {
         this.checkInterval = setInterval(() => {
             this.checkSessions();
-        }, 10 * 60 * 1000);
-        logger_1.Logger.info('Voice activity tracking başlatıldı');
+        }, this.CHECK_INTERVAL);
+        logger_1.Logger.info('Voice activity tracking başlatıldı (saniye bazlı)');
     }
     stop() {
         if (this.checkInterval) {
@@ -31,14 +33,12 @@ class VoiceActivityService {
     }
     async startSession(userId) {
         try {
-            const now = new Date();
-            const session = {
-                userId,
+            const now = Date.now();
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), {
+                userId: userId,
                 joinedAt: now,
-                lastFPAward: now,
-                dailyFPEarned: 0,
-            };
-            await (0, firestore_1.setDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), session);
+                totalSeconds: 0,
+            });
             logger_1.Logger.info('Voice session başladı', { userId });
         }
         catch (error) {
@@ -57,28 +57,41 @@ class VoiceActivityService {
     async checkSessions() {
         try {
             const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'voiceSessions'));
-            const now = new Date();
+            const now = Date.now();
             for (const docSnap of snapshot.docs) {
-                const session = docSnap.data();
-                const userId = session.userId;
-                const timeSinceLastAward = now.getTime() - new Date(session.lastFPAward).getTime();
-                const minutesSinceLastAward = timeSinceLastAward / (1000 * 60);
-                if (minutesSinceLastAward >= 10) {
-                    if (session.dailyFPEarned >= faction_1.FP_RATES.VOICE_DAILY_CAP) {
-                        logger_1.Logger.info('Voice FP günlük limite ulaşıldı', { userId, dailyFP: session.dailyFPEarned });
-                        continue;
-                    }
-                    const success = await factionService_1.factionService.awardFP(userId, faction_1.FP_RATES.VOICE_ACTIVITY_PER_10MIN, 'voice_activity', { duration: '10min' });
-                    if (success) {
-                        await (0, firestore_1.updateDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), {
-                            lastFPAward: now,
-                            dailyFPEarned: session.dailyFPEarned + faction_1.FP_RATES.VOICE_ACTIVITY_PER_10MIN,
-                        });
-                        logger_1.Logger.success('Voice FP verildi', {
+                const data = docSnap.data();
+                const userId = data.userId;
+                const joinedAt = data.joinedAt || now;
+                const totalSeconds = data.totalSeconds || 0;
+                // Geçen süreyi hesapla (saniye)
+                const elapsedSeconds = Math.floor((now - joinedAt) / 1000);
+                if (elapsedSeconds >= 120) { // En az 2 dakika (Firebase quota için)
+                    // Toplam süreyi güncelle
+                    const newTotalSeconds = totalSeconds + elapsedSeconds;
+                    await (0, firestore_1.updateDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), {
+                        joinedAt: now, // Yeni başlangıç noktası
+                        totalSeconds: newTotalSeconds,
+                    });
+                    // Quest tracking - HER ZAMAN gönder (saniye olarak)
+                    // questService içinde dakikaya çevrilecek
+                    try {
+                        const totalMinutes = Math.floor(newTotalSeconds / 60);
+                        await questService_1.questService.trackVoice(userId, totalMinutes);
+                        logger_1.Logger.success('Voice tracked', {
                             userId,
-                            amount: faction_1.FP_RATES.VOICE_ACTIVITY_PER_10MIN,
-                            dailyTotal: session.dailyFPEarned + faction_1.FP_RATES.VOICE_ACTIVITY_PER_10MIN
+                            elapsedSeconds,
+                            totalSeconds: newTotalSeconds,
+                            totalMinutes
                         });
+                    }
+                    catch (error) {
+                        logger_1.Logger.error('Quest voice tracking error', error);
+                    }
+                    // FP ver (her 10 dakika)
+                    const fpMinutes = Math.floor(newTotalSeconds / 60);
+                    const fpToGive = Math.floor(fpMinutes / 10) * faction_1.FP_RATES.VOICE_ACTIVITY_PER_10MIN;
+                    if (fpToGive > 0) {
+                        await factionService_1.factionService.awardFP(userId, fpToGive, 'voice_activity', { totalMinutes: Math.floor(newTotalSeconds / 60) });
                     }
                 }
             }
@@ -87,18 +100,34 @@ class VoiceActivityService {
             logger_1.Logger.error('checkSessions error', error);
         }
     }
-    async resetDailyFP() {
+    async resetDailyVoice() {
         try {
             const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'voiceSessions'));
             for (const docSnap of snapshot.docs) {
                 await (0, firestore_1.updateDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', docSnap.id), {
-                    dailyFPEarned: 0,
+                    totalSeconds: 0,
                 });
             }
-            logger_1.Logger.success('Voice günlük FP sıfırlandı');
+            logger_1.Logger.success('Voice günlük süreler sıfırlandı');
         }
         catch (error) {
-            logger_1.Logger.error('resetDailyFP error', error);
+            logger_1.Logger.error('resetDailyVoice error', error);
+        }
+    }
+    async getUserVoiceTime(userId) {
+        try {
+            const docSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId));
+            if (!docSnap.exists())
+                return 0;
+            const data = docSnap.data();
+            const totalSeconds = data.totalSeconds || 0;
+            const joinedAt = data.joinedAt || Date.now();
+            const currentSeconds = Math.floor((Date.now() - joinedAt) / 1000);
+            return totalSeconds + currentSeconds;
+        }
+        catch (error) {
+            logger_1.Logger.error('getUserVoiceTime error', error);
+            return 0;
         }
     }
 }

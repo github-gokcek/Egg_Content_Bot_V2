@@ -87,30 +87,30 @@ export class PatchNotesService {
           const titleMatch = articleHtml.match(/<title>([^<]+)<\/title>/i);
           const title = titleMatch ? titleMatch[1].replace(/\s*\|.*$/, '').trim() : 'Yeni Yama Notları';
 
-          // "Yamada önce çıkanlar" veya "Patch Highlights" başlığından sonraki ilk resmi bul
+          // Resim bul - önce büyük resimleri ara, sonra og:image
           let image: string | undefined;
           
-          // Önce "Yamada önce çıkanlar" başlığını bul
-          const highlightsMatch = articleHtml.match(/yamada.*?önce.*?çıkanlar/i) || 
-                                 articleHtml.match(/patch.*?highlights/i);
-          
-          if (highlightsMatch) {
-            // Başlıktan sonraki kısmı al
-            const afterHighlights = articleHtml.substring(articleHtml.indexOf(highlightsMatch[0]));
-            
-            // İlk büyük resmi bul (genelde 1920x1080 veya benzeri)
-            const imageMatch = afterHighlights.match(/<img[^>]+src="(https:\/\/[^"]+\.(jpg|png|webp))"[^>]*>/i) ||
-                              afterHighlights.match(/url\(['"]?(https:\/\/[^'"\)]+\.(jpg|png|webp))['"]?\)/i);
-            
-            if (imageMatch) {
-              image = imageMatch[1];
+          // 1. Yöntem: Article body içindeki büyük resimleri bul
+          const imgMatches = articleHtml.matchAll(/<img[^>]+src="(https:\/\/[^"]+)"[^>]*>/gi);
+          for (const match of imgMatches) {
+            const imgUrl = match[1];
+            // Büyük resim boyutlarını içeren URL'leri tercih et
+            if (imgUrl.includes('1920') || imgUrl.includes('1280') || imgUrl.includes('banner')) {
+              image = imgUrl;
+              break;
             }
           }
           
-          // Eğer bulunamadıysa og:image'i kullan
+          // 2. Yöntem: og:image
           if (!image) {
             const ogImageMatch = articleHtml.match(/<meta property="og:image" content="([^"]+)"/);
             image = ogImageMatch ? ogImageMatch[1] : undefined;
+          }
+          
+          // 3. Yöntem: İlk bulduğun herhangi bir büyük resim
+          if (!image) {
+            const firstImgMatch = articleHtml.match(/<img[^>]+src="(https:\/\/[^"]+\.(jpg|png|webp))"[^>]*>/i);
+            image = firstImgMatch ? firstImgMatch[1] : undefined;
           }
 
           Logger.success(`${game.toUpperCase()} patch bulundu: ${title}`);

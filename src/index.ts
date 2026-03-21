@@ -29,9 +29,17 @@ const commandsPath = join(__dirname, 'commands');
 const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js') || file.endsWith('.ts'));
 
 for (const file of commandFiles) {
-  const command = require(join(commandsPath, file));
-  (client as any).commands.set(command.data.name, command);
-  Logger.info(`Komut yüklendi: ${command.data.name}`);
+  try {
+    const command = require(join(commandsPath, file));
+    if (!command || !command.data || !command.data.name) {
+      Logger.warn(`Komut atlandı (geçersiz format): ${file}`);
+      continue;
+    }
+    (client as any).commands.set(command.data.name, command);
+    Logger.info(`Komut yüklendi: ${command.data.name}`);
+  } catch (error) {
+    Logger.error(`Komut yüklenemedi: ${file}`, error);
+  }
 }
 
 // Load events

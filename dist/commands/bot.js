@@ -1,59 +1,54 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.sendAdMessage = sendAdMessage;
 const discord_js_1 = require("discord.js");
-const botStatusService_1 = require("../services/botStatusService");
+const botSettings_1 = require("../services/botSettings");
+const path_1 = __importDefault(require("path"));
+const fs_1 = require("fs");
+async function sendAdMessage(interaction) {
+    const adChannelId = await (0, botSettings_1.getAdChannel)();
+    if (!adChannelId) {
+        await interaction.reply({ content: '❌ Reklam kanalı ayarlanmamış! `/set reklam` komutuyla ayarlayın.', ephemeral: true });
+        return;
+    }
+    const channel = await interaction.client.channels.fetch(adChannelId);
+    if (!channel || !channel.isTextBased()) {
+        await interaction.reply({ content: '❌ Reklam kanalı bulunamadı!', ephemeral: true });
+        return;
+    }
+    const imagePath = path_1.default.join(process.cwd(), 'assetler', 'Ninja.png');
+    // Görsel dosyası kontrolü
+    if (!(0, fs_1.existsSync)(imagePath)) {
+        await interaction.reply({ content: '❌ Reklam görseli bulunamadı! (assetler/Ninja.png)', ephemeral: true });
+        return;
+    }
+    const attachment = new discord_js_1.AttachmentBuilder(imagePath);
+    const embed = new discord_js_1.EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('🎮 Botun Tüm Özelliklerini Keşfet!')
+        .setDescription('**Casino sistemini** denediniz mi? 🎰\n' +
+        '**RPG maceralarına** katıldınız mı? ⚔️\n' +
+        '**Günlük görevlerinizi** tamamladınız mı? 📋\n\n' +
+        '**Komutları keşfet:** `/yardim`')
+        .setImage('attachment://Ninja.png')
+        .setTimestamp();
+    await channel.send({ embeds: [embed], files: [attachment] });
+    await interaction.reply({ content: '✅ Reklam mesajı gönderildi!', ephemeral: true });
+}
 module.exports = {
     data: new discord_js_1.SlashCommandBuilder()
         .setName('bot')
-        .setDescription('Bot yönetimi')
-        .addSubcommand(sub => sub.setName('status')
-        .setDescription('Bot durumunu görüntüle'))
-        .addSubcommand(sub => sub.setName('mode')
-        .setDescription('Bot modunu değiştir (Admin)')
-        .addStringOption(opt => opt.setName('mod')
-        .setDescription('Bot modu')
-        .setRequired(true)
-        .addChoices({ name: '🟢 Live (Canlı)', value: 'live' }, { name: '🟡 Dev (Test)', value: 'dev' }))),
+        .setDescription('Bot yönetim komutları')
+        .addSubcommand(subcommand => subcommand
+        .setName('reklam')
+        .setDescription('Reklam mesajını manuel olarak gönder')),
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
-        if (subcommand === 'status') {
-            const mode = botStatusService_1.botStatusService.getMode();
-            const modeEmoji = mode === 'live' ? '🟢' : '🟡';
-            const modeText = mode === 'live' ? 'CANLI' : 'TEST';
-            const modeDesc = mode === 'live'
-                ? 'Tüm fonksiyonlar aktif çalışıyor'
-                : 'Test modu - İşlemler simüle ediliyor, gerçek işlem yapılmıyor';
-            const embed = new discord_js_1.EmbedBuilder()
-                .setColor(mode === 'live' ? 0x00ff00 : 0xffff00)
-                .setTitle('🤖 Bot Durumu')
-                .addFields({ name: 'Mod', value: `${modeEmoji} **${modeText}**`, inline: true }, { name: 'Açıklama', value: modeDesc, inline: false }, { name: 'Değiştirmek için', value: '`/bot mode` komutunu kullanın (Admin)', inline: false })
-                .setTimestamp();
-            await interaction.reply({ embeds: [embed] });
-        }
-        else if (subcommand === 'mode') {
-            if (!interaction.memberPermissions?.has(discord_js_1.PermissionFlagsBits.Administrator)) {
-                return interaction.reply({
-                    content: '❌ Bu komutu kullanmak için yönetici yetkisine sahip olmalısınız!',
-                    ephemeral: true
-                });
-            }
-            const newMode = interaction.options.getString('mod', true);
-            const oldMode = botStatusService_1.botStatusService.getMode();
-            if (oldMode === newMode) {
-                return interaction.reply({
-                    content: `❌ Bot zaten ${newMode.toUpperCase()} modunda!`,
-                    ephemeral: true
-                });
-            }
-            botStatusService_1.botStatusService.setMode(newMode);
-            const modeEmoji = newMode === 'live' ? '🟢' : '🟡';
-            const modeText = newMode === 'live' ? 'CANLI' : 'TEST';
-            const embed = new discord_js_1.EmbedBuilder()
-                .setColor(newMode === 'live' ? 0x00ff00 : 0xffff00)
-                .setTitle('✅ Bot Modu Değiştirildi')
-                .addFields({ name: 'Yeni Mod', value: `${modeEmoji} **${modeText}**`, inline: true }, { name: 'Önceki Mod', value: oldMode.toUpperCase(), inline: true })
-                .setTimestamp();
-            await interaction.reply({ embeds: [embed] });
+        if (subcommand === 'reklam') {
+            await sendAdMessage(interaction);
         }
     },
 };

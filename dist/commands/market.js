@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = require("discord.js");
-const marketService_1 = require("../services/marketService");
 const databaseService_1 = require("../services/databaseService");
+const inventoryService_1 = require("../services/inventoryService");
 module.exports = {
     data: new discord_js_1.SlashCommandBuilder()
         .setName('market')
@@ -10,59 +10,62 @@ module.exports = {
         .addSubcommand(sub => sub.setName('list')
         .setDescription('Market ürünlerini listele'))
         .addSubcommand(sub => sub.setName('buy')
-        .setDescription('Rol satın al')
-        .addRoleOption(opt => opt.setName('rol').setDescription('Satın alınacak rol').setRequired(true)))
-        .addSubcommand(sub => sub.setName('admin')
-        .setDescription('Admin komutları')
-        .addStringOption(opt => opt.setName('action')
-        .setDescription('Yapılacak işlem')
-        .setRequired(true)
-        .addChoices({ name: 'Ürün Ekle', value: 'add' }, { name: 'Ürün Sil', value: 'remove' }, { name: 'Fiyat Güncelle', value: 'update_price' }))
-        .addRoleOption(opt => opt.setName('rol').setDescription('İşlem yapılacak rol').setRequired(true))
-        .addIntegerOption(opt => opt.setName('fiyat').setDescription('Fiyat (sadece ekle/güncelle için)').setRequired(false))),
+        .setDescription('Eşya satın al')
+        .addStringOption(opt => opt.setName('item').setDescription('Satın alınacak eşya').setRequired(true)
+        .addChoices({ name: '👑 Custom Title - 5000 coin', value: 'custom_title' }, { name: '⬇️ Derank - 1000 coin', value: 'derank' }, { name: '🚪 Özel Oda - 5000 coin', value: 'private_room' }, { name: '🎭 Sticker Ekleme - 2000 coin', value: 'sticker_add' }, { name: '📌 Pin - 500 coin', value: 'pin' }, { name: '💬 Trashtalk - 100 coin', value: 'trashtalk' }))),
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         if (subcommand === 'list') {
-            const player = await databaseService_1.databaseService.getPlayer(interaction.user.id);
-            const balance = player?.balance ?? 100; // Bakiye yoksa 100 olarak varsay
-            const items = await marketService_1.marketService.getItems(interaction.guildId);
-            if (items.length === 0) {
-                return interaction.reply({
-                    content: '🛒 Market şu anda boş! Adminler `/market admin add` ile ürün ekleyebilir.',
-                    ephemeral: true
-                });
+            let player = await databaseService_1.databaseService.getPlayer(interaction.user.id);
+            if (!player) {
+                // Oyuncu yoksa otomatik oluştur
+                player = {
+                    discordId: interaction.user.id,
+                    username: interaction.user.username,
+                    balance: 0,
+                    createdAt: new Date(),
+                    stats: {
+                        lol: { wins: 0, losses: 0 },
+                        tft: { matches: 0, top4: 0, rankings: [], points: 0 }
+                    }
+                };
+                await databaseService_1.databaseService.savePlayer(player);
             }
+            const balance = player.balance;
             const embed = new discord_js_1.EmbedBuilder()
                 .setColor(0x3498db)
-                .setTitle('🛒 Market - Rol Mağazası')
-                .setDescription(`💳 **Bakiyeniz:** ${balance} 🪙\n\n🛍️ **Mevcut Ürünler:**`)
-                .addFields(items.map(item => {
-                // Rol rengini al (hex formatında)
-                const role = interaction.guild?.roles.cache.get(item.roleId);
-                const roleColor = role?.color || 0x99aab5; // Varsayılan Discord gri rengi
-                return {
-                    name: `🎭 ${item.roleName}`,
-                    value: `💰 **Fiyat:** ${item.price} 🪙\n🎨 **Renk:** <@&${item.roleId}>\n📊 **Durum:** ${balance >= item.price ? '✅ Satın Alabilirsiniz' : '❌ Yetersiz Bakiye'}`,
-                    inline: true
-                };
-            }))
-                .setFooter({ text: '💡 Rol satın almak için: /market buy rol:@RolAdı' })
+                .setTitle('🛒 Market - Eşya Mağazası')
+                .setDescription(`💳 **Bakiyeniz:** ${player.balance} 🪙\n\n🛍️ **Mevcut Ürünler:**`)
+                .addFields(inventoryService_1.MARKET_ITEMS.map(item => ({
+                name: `${item.emoji} ${item.name}`,
+                value: `📝 ${item.description}\n💰 **Fiyat:** ${item.price} 🪙\n📊 **Durum:** ${player.balance >= item.price ? '✅ Satın Alabilirsiniz' : '❌ Yetersiz Bakiye'}`,
+                inline: true
+            })))
+                .setFooter({ text: '💡 Eşya satın almak için: /market buy item:[EşyaAdı]' })
                 .setTimestamp();
             await interaction.reply({ embeds: [embed] });
         }
         else if (subcommand === 'buy') {
-            const role = interaction.options.getRole('rol', true);
-            const player = await databaseService_1.databaseService.getPlayer(interaction.user.id);
+            const itemId = interaction.options.getString('item', true);
+            let player = await databaseService_1.databaseService.getPlayer(interaction.user.id);
             if (!player) {
-                return interaction.reply({
-                    content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-                    ephemeral: true
-                });
+                // Oyuncu yoksa otomatik oluştur
+                player = {
+                    discordId: interaction.user.id,
+                    username: interaction.user.username,
+                    balance: 0,
+                    createdAt: new Date(),
+                    stats: {
+                        lol: { wins: 0, losses: 0 },
+                        tft: { matches: 0, top4: 0, rankings: [], points: 0 }
+                    }
+                };
+                await databaseService_1.databaseService.savePlayer(player);
             }
-            const item = await marketService_1.marketService.getItem(interaction.guildId, role.id);
+            const item = inventoryService_1.MARKET_ITEMS.find(i => i.id === itemId);
             if (!item) {
                 return interaction.reply({
-                    content: '❌ Bu rol markette satılmıyor!',
+                    content: '❌ Bu eşya markette satılmıyor!',
                     ephemeral: true
                 });
             }
@@ -72,86 +75,19 @@ module.exports = {
                     ephemeral: true
                 });
             }
-            // Kullanıcının zaten bu rolü var mı?
-            const member = await interaction.guild.members.fetch(interaction.user.id);
-            if (member.roles.cache.has(role.id)) {
-                return interaction.reply({
-                    content: '❌ Bu role zaten sahipsiniz!',
-                    ephemeral: true
-                });
-            }
-            // Bakiyeyi düş ve rolü ver
+            // Bakiyeyi düş ve eşyayı envantere ekle
             player.balance -= item.price;
             await databaseService_1.databaseService.updatePlayer(player);
-            await member.roles.add(role);
+            await inventoryService_1.inventoryService.addItem(interaction.user.id, itemId);
             const embed = new discord_js_1.EmbedBuilder()
-                .setColor(role.color || 0x00ff00)
+                .setColor(0x00ff00)
                 .setTitle('🎉 Satın Alma Başarılı!')
-                .setDescription(`🎭 **${role.name}** rolü başarıyla satın alındı!\n\n🎨 Yeni rolünüz aktif edildi!`)
-                .addFields({ name: '💰 Ödenen Tutar', value: `${item.price} 🪙`, inline: true }, { name: '💳 Kalan Bakiye', value: `${player.balance} 🪙`, inline: true }, { name: '🎭 Aldığınız Rol', value: `<@&${role.id}>`, inline: true })
+                .setDescription(`${item.emoji} **${item.name}** başarıyla satın alındı!\n\n📦 Envanterinize eklendi!`)
+                .addFields({ name: '💰 Ödenen Tutar', value: `${item.price} 🪙`, inline: true }, { name: '💳 Kalan Bakiye', value: `${player.balance} 🪙`, inline: true }, { name: '📦 Aldığınız Eşya', value: `${item.emoji} ${item.name}`, inline: true })
+                .setFooter({ text: 'Envanterinizi görmek için: /envanter' })
                 .setThumbnail(interaction.user.displayAvatarURL())
                 .setTimestamp();
             await interaction.reply({ embeds: [embed] });
-        }
-        else if (subcommand === 'admin') {
-            if (!interaction.memberPermissions?.has(discord_js_1.PermissionFlagsBits.Administrator)) {
-                return interaction.reply({
-                    content: '❌ Bu komutu kullanmak için yönetici yetkisine sahip olmalısınız!',
-                    ephemeral: true
-                });
-            }
-            const action = interaction.options.getString('action', true);
-            const role = interaction.options.getRole('rol', true);
-            const price = interaction.options.getInteger('fiyat');
-            if (action === 'add') {
-                if (!price || price <= 0) {
-                    return interaction.reply({
-                        content: '❌ Geçerli bir fiyat belirtmelisiniz!',
-                        ephemeral: true
-                    });
-                }
-                await marketService_1.marketService.addItem(interaction.guildId, role.id, role.name, price, interaction.user.id);
-                await interaction.reply({
-                    content: `✅ **${role.name}** rolü ${price} 🪙 fiyatıyla markete eklendi!`,
-                    ephemeral: true
-                });
-            }
-            else if (action === 'remove') {
-                const removed = await marketService_1.marketService.removeItem(interaction.guildId, role.id);
-                if (removed) {
-                    await interaction.reply({
-                        content: `✅ **${role.name}** rolü marketten kaldırıldı!`,
-                        ephemeral: true
-                    });
-                }
-                else {
-                    await interaction.reply({
-                        content: `❌ **${role.name}** rolü markette bulunamadı!`,
-                        ephemeral: true
-                    });
-                }
-            }
-            else if (action === 'update_price') {
-                if (!price || price <= 0) {
-                    return interaction.reply({
-                        content: '❌ Geçerli bir fiyat belirtmelisiniz!',
-                        ephemeral: true
-                    });
-                }
-                const updated = await marketService_1.marketService.updatePrice(interaction.guildId, role.id, price);
-                if (updated) {
-                    await interaction.reply({
-                        content: `✅ **${role.name}** rolünün fiyatı ${price} 🪙 olarak güncellendi!`,
-                        ephemeral: true
-                    });
-                }
-                else {
-                    await interaction.reply({
-                        content: `❌ **${role.name}** rolü markette bulunamadı!`,
-                        ephemeral: true
-                    });
-                }
-            }
         }
     },
 };

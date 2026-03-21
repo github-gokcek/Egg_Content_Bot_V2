@@ -8,5 +8,9 @@ exports.config = {
     intents: [
         discord_js_1.GatewayIntentBits.Guilds,
         discord_js_1.GatewayIntentBits.GuildMessages,
+        discord_js_1.GatewayIntentBits.GuildMessageReactions, // Reaction event'leri için ZORUNLU!
+        discord_js_1.GatewayIntentBits.MessageContent, // Mesaj içeriği okumak için
+        discord_js_1.GatewayIntentBits.GuildVoiceStates,
+        discord_js_1.GatewayIntentBits.GuildMembers,
     ],
 };

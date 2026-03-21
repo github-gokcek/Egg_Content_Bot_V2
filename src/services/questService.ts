@@ -248,6 +248,13 @@ class QuestService {
 
   async saveUserQuests(userQuests: UserQuests): Promise<void> {
     try {
+      // Son kayıttan 5 saniye geçmemişse kaydetme (debounce - Firebase quota için)
+      const now = Date.now();
+      if (now - userQuests.lastSaveTime < 5000) {
+        Logger.info('Skipping save (debounce)', { userId: userQuests.userId });
+        return;
+      }
+
       // Undefined değerleri temizle
       const cleanData: any = {
         userId: userQuests.userId,
@@ -282,7 +289,7 @@ class QuestService {
         eveningMessages: userQuests.eveningMessages || 0,
         fastMessageTimestamps: userQuests.fastMessageTimestamps || [],
         isResetting: userQuests.isResetting || false,
-        lastSaveTime: userQuests.lastSaveTime || Date.now(),
+        lastSaveTime: now,
       };
       
       // specialQuest sadece varsa ekle
@@ -290,11 +297,13 @@ class QuestService {
         cleanData.specialQuest = userQuests.specialQuest;
       }
       
-      // Timeout ile setDoc
+      // Timeout ile setDoc (10 saniye)
       await Promise.race([
         setDoc(doc(db, 'userQuests', userQuests.userId), cleanData),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 10000))
       ]);
+      
+      userQuests.lastSaveTime = now;
     } catch (error) {
       Logger.error('saveUserQuests error', error);
       // Hata olsa bile devam et

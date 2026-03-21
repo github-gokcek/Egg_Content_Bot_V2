@@ -14,7 +14,7 @@ interface VoiceSession {
 
 class VoiceActivityService {
   private checkInterval: NodeJS.Timeout | null = null;
-  private readonly CHECK_INTERVAL = 30 * 1000; // 30 saniye
+  private readonly CHECK_INTERVAL = 2 * 60 * 1000; // 2 dakika (Firebase quota için)
 
   start() {
     this.checkInterval = setInterval(() => {
@@ -81,7 +81,7 @@ class VoiceActivityService {
         // Geçen süreyi hesapla (saniye)
         const elapsedSeconds = Math.floor((now - joinedAt) / 1000);
         
-        if (elapsedSeconds >= 30) { // En az 30 saniye
+        if (elapsedSeconds >= 120) { // En az 2 dakika (Firebase quota için)
           // Toplam süreyi güncelle
           const newTotalSeconds = totalSeconds + elapsedSeconds;
           

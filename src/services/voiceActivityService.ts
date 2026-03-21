@@ -17,6 +17,9 @@ class VoiceActivityService {
   private readonly CHECK_INTERVAL = 2 * 60 * 1000; // 2 dakika (Firebase quota için)
 
   start() {
+    // Bot başlatıldığında eski sessionları temizle
+    this.cleanupStaleSessions();
+    
     this.checkInterval = setInterval(() => {
       this.checkSessions();
     }, this.CHECK_INTERVAL);
@@ -128,8 +131,26 @@ class VoiceActivityService {
     try {
       const snapshot = await getDocs(collection(db, 'voiceSessions'));
       for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const userId = data.userId;
+        
+        // CRITICAL FIX: Reset öncesi son kez quest tracking yap
+        const totalSeconds = data.totalSeconds || 0;
+        const totalMinutes = Math.floor(totalSeconds / 60);
+        
+        if (totalMinutes > 0) {
+          try {
+            await questService.trackVoice(userId, totalMinutes);
+            Logger.info('Final voice track before reset', { userId, totalMinutes });
+          } catch (error) {
+            Logger.error('Final voice tracking error', error);
+          }
+        }
+        
+        // Şimdi sıfırla
         await updateDoc(doc(db, 'voiceSessions', docSnap.id), {
           totalSeconds: 0,
+          joinedAt: Date.now(), // Yeni başlangıç noktası
         });
       }
       Logger.success('Voice günlük süreler sıfırlandı');
@@ -152,6 +173,29 @@ class VoiceActivityService {
     } catch (error) {
       Logger.error('getUserVoiceTime error', error);
       return 0;
+    }
+  }
+  
+  private async cleanupStaleSessions() {
+    try {
+      const snapshot = await getDocs(collection(db, 'voiceSessions'));
+      const now = Date.now();
+      const STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 saat
+      
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const joinedAt = data.joinedAt || now;
+        
+        // 24 saatten eski sessionları temizle (bot offline olmuş olabilir)
+        if (now - joinedAt > STALE_THRESHOLD) {
+          Logger.warn('Stale voice session cleaned', { userId: data.userId, age: Math.floor((now - joinedAt) / 1000 / 60) + ' minutes' });
+          await deleteDoc(doc(db, 'voiceSessions', docSnap.id));
+        }
+      }
+      
+      Logger.info('Stale voice sessions cleanup completed');
+    } catch (error) {
+      Logger.error('cleanupStaleSessions error', error);
     }
   }
 }

@@ -441,8 +441,15 @@ class QuestService {
       if (!userQuests) return;
     }
     
-    // Toplam dakikayı direkt set et (increment değil)
-    userQuests.voiceMinutes = minutes;
+    // CRITICAL FIX: Toplam dakikayı direkt set et (voiceActivityService zaten toplamı gönderiyor)
+    // Ama eğer yeni değer eskisinden küçükse (reset olmuş olabilir), increment yap
+    if (minutes < userQuests.voiceMinutes) {
+      // Reset olmuş, yeni session başlamış
+      userQuests.voiceMinutes = minutes;
+    } else {
+      // Normal durum, toplamı güncelle
+      userQuests.voiceMinutes = minutes;
+    }
 
     Logger.info('Voice tracked', { 
       userId, 

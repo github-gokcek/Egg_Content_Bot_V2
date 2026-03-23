@@ -9,19 +9,44 @@ const logger_1 = require("../utils/logger");
 const questService_1 = require("./questService");
 class VoiceActivityService {
     checkInterval = null;
-    CHECK_INTERVAL = 2 * 60 * 1000; // 2 dakika (Firebase quota için)
+    CHECK_INTERVAL = 2 * 60 * 1000; // 2 dakika
+    activeSessions = new Map();
     start() {
-        // Bot başlatıldığında eski sessionları temizle
-        this.cleanupStaleSessions();
+        this.loadActiveSessions();
         this.checkInterval = setInterval(() => {
             this.checkSessions();
         }, this.CHECK_INTERVAL);
-        logger_1.Logger.info('Voice activity tracking başlatıldı (saniye bazlı)');
+        logger_1.Logger.info('Voice activity tracking başlatıldı (memory cache ile)');
     }
     stop() {
         if (this.checkInterval) {
             clearInterval(this.checkInterval);
             this.checkInterval = null;
+        }
+    }
+    async loadActiveSessions() {
+        try {
+            const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'voiceSessions'));
+            const now = Date.now();
+            const STALE_THRESHOLD = 24 * 60 * 60 * 1000;
+            for (const docSnap of snapshot.docs) {
+                const data = docSnap.data();
+                const joinedAt = data.joinedAt || now;
+                if (now - joinedAt > STALE_THRESHOLD) {
+                    await (0, firestore_1.deleteDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', docSnap.id));
+                    logger_1.Logger.warn('Stale session cleaned', { userId: data.userId });
+                }
+                else {
+                    this.activeSessions.set(data.userId, {
+                        joinedAt: data.joinedAt || now,
+                        totalSeconds: data.totalSeconds || 0
+                    });
+                }
+            }
+            logger_1.Logger.info('Active voice sessions loaded', { count: this.activeSessions.size });
+        }
+        catch (error) {
+            logger_1.Logger.error('loadActiveSessions error', error);
         }
     }
     async handleVoiceStateUpdate(oldState, newState) {
@@ -36,6 +61,10 @@ class VoiceActivityService {
     async startSession(userId) {
         try {
             const now = Date.now();
+            this.activeSessions.set(userId, {
+                joinedAt: now,
+                totalSeconds: 0
+            });
             await (0, firestore_1.setDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), {
                 userId: userId,
                 joinedAt: now,
@@ -49,6 +78,7 @@ class VoiceActivityService {
     }
     async endSession(userId) {
         try {
+            this.activeSessions.delete(userId);
             await (0, firestore_1.deleteDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId));
             logger_1.Logger.info('Voice session bitti', { userId });
         }
@@ -58,24 +88,23 @@ class VoiceActivityService {
     }
     async checkSessions() {
         try {
-            const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'voiceSessions'));
             const now = Date.now();
-            for (const docSnap of snapshot.docs) {
-                const data = docSnap.data();
-                const userId = data.userId;
-                const joinedAt = data.joinedAt || now;
-                const totalSeconds = data.totalSeconds || 0;
-                // Geçen süreyi hesapla (saniye)
-                const elapsedSeconds = Math.floor((now - joinedAt) / 1000);
-                if (elapsedSeconds >= 120) { // En az 2 dakika (Firebase quota için)
-                    // Toplam süreyi güncelle
-                    const newTotalSeconds = totalSeconds + elapsedSeconds;
+            // Memory'deki aktif sessionları kontrol et (Firebase'den okuma YOK!)
+            for (const [userId, session] of this.activeSessions.entries()) {
+                const elapsedSeconds = Math.floor((now - session.joinedAt) / 1000);
+                if (elapsedSeconds >= 120) {
+                    const newTotalSeconds = session.totalSeconds + elapsedSeconds;
+                    // Memory'yi güncelle
+                    this.activeSessions.set(userId, {
+                        joinedAt: now,
+                        totalSeconds: newTotalSeconds
+                    });
+                    // Firebase'e kaydet (sadece 1 write)
                     await (0, firestore_1.updateDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), {
-                        joinedAt: now, // Yeni başlangıç noktası
+                        joinedAt: now,
                         totalSeconds: newTotalSeconds,
                     });
-                    // Quest tracking - HER ZAMAN gönder (saniye olarak)
-                    // questService içinde dakikaya çevrilecek
+                    // Quest tracking
                     try {
                         const totalMinutes = Math.floor(newTotalSeconds / 60);
                         await questService_1.questService.trackVoice(userId, totalMinutes);
@@ -89,7 +118,7 @@ class VoiceActivityService {
                     catch (error) {
                         logger_1.Logger.error('Quest voice tracking error', error);
                     }
-                    // FP ver (her 10 dakika)
+                    // FP ver
                     const fpMinutes = Math.floor(newTotalSeconds / 60);
                     const fpToGive = Math.floor(fpMinutes / 10) * faction_1.FP_RATES.VOICE_ACTIVITY_PER_10MIN;
                     if (fpToGive > 0) {
@@ -104,13 +133,9 @@ class VoiceActivityService {
     }
     async resetDailyVoice() {
         try {
-            const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'voiceSessions'));
-            for (const docSnap of snapshot.docs) {
-                const data = docSnap.data();
-                const userId = data.userId;
-                // CRITICAL FIX: Reset öncesi son kez quest tracking yap
-                const totalSeconds = data.totalSeconds || 0;
-                const totalMinutes = Math.floor(totalSeconds / 60);
+            // Memory'deki sessionları sıfırla
+            for (const [userId, session] of this.activeSessions.entries()) {
+                const totalMinutes = Math.floor(session.totalSeconds / 60);
                 if (totalMinutes > 0) {
                     try {
                         await questService_1.questService.trackVoice(userId, totalMinutes);
@@ -120,10 +145,15 @@ class VoiceActivityService {
                         logger_1.Logger.error('Final voice tracking error', error);
                     }
                 }
-                // Şimdi sıfırla
-                await (0, firestore_1.updateDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', docSnap.id), {
+                // Memory'de sıfırla
+                this.activeSessions.set(userId, {
+                    joinedAt: Date.now(),
+                    totalSeconds: 0
+                });
+                // Firebase'e kaydet
+                await (0, firestore_1.updateDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId), {
                     totalSeconds: 0,
-                    joinedAt: Date.now(), // Yeni başlangıç noktası
+                    joinedAt: Date.now(),
                 });
             }
             logger_1.Logger.success('Voice günlük süreler sıfırlandı');
@@ -134,6 +164,13 @@ class VoiceActivityService {
     }
     async getUserVoiceTime(userId) {
         try {
+            // Önce memory'den kontrol et
+            const session = this.activeSessions.get(userId);
+            if (session) {
+                const currentSeconds = Math.floor((Date.now() - session.joinedAt) / 1000);
+                return session.totalSeconds + currentSeconds;
+            }
+            // Memory'de yoksa Firebase'den oku
             const docSnap = await (0, firestore_1.getDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', userId));
             if (!docSnap.exists())
                 return 0;
@@ -146,26 +183,6 @@ class VoiceActivityService {
         catch (error) {
             logger_1.Logger.error('getUserVoiceTime error', error);
             return 0;
-        }
-    }
-    async cleanupStaleSessions() {
-        try {
-            const snapshot = await (0, firestore_1.getDocs)((0, firestore_1.collection)(firebase_1.db, 'voiceSessions'));
-            const now = Date.now();
-            const STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 saat
-            for (const docSnap of snapshot.docs) {
-                const data = docSnap.data();
-                const joinedAt = data.joinedAt || now;
-                // 24 saatten eski sessionları temizle (bot offline olmuş olabilir)
-                if (now - joinedAt > STALE_THRESHOLD) {
-                    logger_1.Logger.warn('Stale voice session cleaned', { userId: data.userId, age: Math.floor((now - joinedAt) / 1000 / 60) + ' minutes' });
-                    await (0, firestore_1.deleteDoc)((0, firestore_1.doc)(firebase_1.db, 'voiceSessions', docSnap.id));
-                }
-            }
-            logger_1.Logger.info('Stale voice sessions cleanup completed');
-        }
-        catch (error) {
-            logger_1.Logger.error('cleanupStaleSessions error', error);
         }
     }
 }

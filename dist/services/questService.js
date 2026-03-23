@@ -185,15 +185,9 @@ class QuestService {
             completed: false,
         }));
     }
-    async saveUserQuests(userQuests) {
+    async saveUserQuests(userQuests, force = false) {
         try {
-            // DEBOUNCE KALDIRILDI - Her tracking önemli!
-            // Son kayıttan 1 saniye geçmemişse kaydetme (sadece spam önleme)
             const now = Date.now();
-            if (now - userQuests.lastSaveTime < 1000) {
-                logger_1.Logger.info('Skipping save (spam prevention)', { userId: userQuests.userId });
-                return;
-            }
             // Undefined değerleri temizle
             const cleanData = {
                 userId: userQuests.userId,
@@ -234,16 +228,12 @@ class QuestService {
             if (userQuests.specialQuest) {
                 cleanData.specialQuest = userQuests.specialQuest;
             }
-            // Timeout ile setDoc (10 saniye)
-            await Promise.race([
-                (0, firestore_1.setDoc)((0, firestore_1.doc)(firebase_1.db, 'userQuests', userQuests.userId), cleanData),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 10000))
-            ]);
+            // Firebase'e kaydet
+            await (0, firestore_1.setDoc)((0, firestore_1.doc)(firebase_1.db, 'userQuests', userQuests.userId), cleanData);
             userQuests.lastSaveTime = now;
         }
         catch (error) {
             logger_1.Logger.error('saveUserQuests error', error);
-            // Hata olsa bile devam et
         }
     }
     async checkAndResetDaily(userId) {
@@ -272,7 +262,6 @@ class QuestService {
         return false;
     }
     async trackMessage(userId, message) {
-        // Async olarak çalıştır, await etme
         this.trackMessageAsync(userId, message).catch(error => {
             logger_1.Logger.error('trackMessage async error', error);
         });
@@ -354,8 +343,7 @@ class QuestService {
             });
         }
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
-        await this.saveUserQuests(userQuests);
+        await this.saveUserQuests(userQuests); // Debounce ile kaydet
     }
     async trackVoice(userId, minutes) {
         this.trackVoiceAsync(userId, minutes).catch(error => {
@@ -388,7 +376,6 @@ class QuestService {
             totalMinutes: userQuests.voiceMinutes
         });
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackReactionGiven(userId, messageId, messageAuthorId, emoji) {
@@ -429,7 +416,6 @@ class QuestService {
             });
         }
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackReactionReceived(userId, messageId) {
@@ -451,7 +437,6 @@ class QuestService {
         const current = userQuests.reactionsReceived.get(messageId) || 0;
         userQuests.reactionsReceived.set(messageId, current + 1);
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackReplyReceived(userId, messageId) {
@@ -473,7 +458,6 @@ class QuestService {
         const current = userQuests.repliesReceived.get(messageId) || 0;
         userQuests.repliesReceived.set(messageId, current + 1);
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackRastgeleUsed(userId) {
@@ -494,7 +478,6 @@ class QuestService {
         }
         // Rastgele komutu kullanıldı - şu an için bir görev yok ama gelecekte eklenebilir
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     // Casino tracking fonksiyonları
@@ -516,7 +499,6 @@ class QuestService {
         }
         userQuests.usedDailyCommand = true;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackSlotPlay(userId) {
@@ -537,7 +519,6 @@ class QuestService {
         }
         userQuests.slotPlays++;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackBlackjackPlay(userId, won = false) {
@@ -561,7 +542,6 @@ class QuestService {
             userQuests.blackjackWins++;
         }
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackCoinflipPlay(userId) {
@@ -582,7 +562,6 @@ class QuestService {
         }
         userQuests.coinflipPlays++;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackCrashPlay(userId) {
@@ -603,7 +582,6 @@ class QuestService {
         }
         userQuests.crashPlays++;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackMinesTiles(userId, tiles) {
@@ -624,7 +602,6 @@ class QuestService {
         }
         userQuests.minesPlays += tiles;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackCasinoSpent(userId, amount) {
@@ -645,7 +622,6 @@ class QuestService {
         }
         userQuests.casinoSpent += amount;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackCasinoWin(userId, amount, isSingleBet = false) {
@@ -671,7 +647,6 @@ class QuestService {
             logger_1.Logger.info('New biggest single win', { userId, amount });
         }
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async trackDuelloWin(userId) {
@@ -692,7 +667,6 @@ class QuestService {
         }
         userQuests.duelloWins++;
         await this.updateQuestProgress(userQuests);
-        userQuests.lastSaveTime = Date.now();
         await this.saveUserQuests(userQuests);
     }
     async updateQuestProgress(userQuests) {
@@ -812,6 +786,8 @@ class QuestService {
                 quest.completed = true;
                 await this.giveReward(userQuests.userId, quest.reward);
                 logger_1.Logger.success('Quest completed', { userId: userQuests.userId, questId: quest.id, reward: quest.reward });
+                // Quest tamamlandığında force save yap
+                await this.saveUserQuests(userQuests, true);
             }
         }
         // Tüm günlük görevler tamamlandı mı kontrol et
@@ -819,6 +795,8 @@ class QuestService {
         if (allCompleted && !userQuests.allDailyCompleted) {
             userQuests.allDailyCompleted = true;
             logger_1.Logger.success('All daily quests completed! Special quest unlocked', { userId: userQuests.userId });
+            // Tüm görevler tamamlandığında force save yap
+            await this.saveUserQuests(userQuests, true);
         }
         // Özel görevi güncelle (sadece günlük görevler tamamlandıysa)
         if (userQuests.allDailyCompleted && userQuests.specialQuest && !userQuests.specialQuest.completed) {
@@ -859,6 +837,8 @@ class QuestService {
                 special.completed = true;
                 await this.giveReward(userQuests.userId, special.reward);
                 logger_1.Logger.success('Special quest completed!', { userId: userQuests.userId, questId: special.id, reward: special.reward });
+                // Özel görev tamamlandığında force save yap
+                await this.saveUserQuests(userQuests, true);
             }
         }
     }

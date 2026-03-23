@@ -248,11 +248,7 @@ class QuestService {
 
   async saveUserQuests(userQuests: UserQuests, force: boolean = false): Promise<void> {
     try {
-      // EMERGENCY: Firebase quota exceeded - Debounce 30 saniye
       const now = Date.now();
-      if (!force && now - userQuests.lastSaveTime < 30000) {
-        return; // Sessizce skip et
-      }
 
       // Undefined değerleri temizle
       const cleanData: any = {
@@ -296,21 +292,12 @@ class QuestService {
         cleanData.specialQuest = userQuests.specialQuest;
       }
       
-      // Timeout ile setDoc (30 saniye - quota exceeded durumu için)
-      await Promise.race([
-        setDoc(doc(db, 'userQuests', userQuests.userId), cleanData),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 30000))
-      ]);
+      // Firebase'e kaydet
+      await setDoc(doc(db, 'userQuests', userQuests.userId), cleanData);
       
       userQuests.lastSaveTime = now;
     } catch (error) {
-      // Firebase quota exceeded - Sessizce devam et
-      if (error instanceof Error && error.message.includes('RESOURCE_EXHAUSTED')) {
-        Logger.warn('Firebase quota exceeded, skipping save', { userId: userQuests.userId });
-        return;
-      }
       Logger.error('saveUserQuests error', error);
-      // Hata olsa bile devam et
     }
   }
 
@@ -345,10 +332,9 @@ class QuestService {
   }
 
   async trackMessage(userId: string, message: any): Promise<void> {
-    // EMERGENCY: Firebase quota exceeded - Tracking'i skip et
-    return;
-    // Async olarak çalıştır, await etme
-    this.trackMessageAsync(userId, message).catch(() => {});
+    this.trackMessageAsync(userId, message).catch(error => {
+      Logger.error('trackMessage async error', error);
+    });
   }
 
   private async trackMessageAsync(userId: string, message: any): Promise<void> {
@@ -441,9 +427,9 @@ class QuestService {
   }
 
   async trackVoice(userId: string, minutes: number): Promise<void> {
-    // EMERGENCY: Firebase quota exceeded - Tracking'i skip et
-    return;
-    this.trackVoiceAsync(userId, minutes).catch(() => {});
+    this.trackVoiceAsync(userId, minutes).catch(error => {
+      Logger.error('trackVoice async error', error);
+    });
   }
 
   private async trackVoiceAsync(userId: string, minutes: number): Promise<void> {
@@ -478,8 +464,9 @@ class QuestService {
   }
 
   async trackReactionGiven(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
-    return; // EMERGENCY: Skip
-    this.trackReactionGivenAsync(userId, messageId, messageAuthorId, emoji).catch(() => {});
+    this.trackReactionGivenAsync(userId, messageId, messageAuthorId, emoji).catch(error => {
+      Logger.error('trackReactionGiven async error', error);
+    });
   }
 
   private async trackReactionGivenAsync(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
@@ -524,8 +511,9 @@ class QuestService {
   }
 
   async trackReactionReceived(userId: string, messageId: string): Promise<void> {
-    return; // EMERGENCY: Skip
-    this.trackReactionReceivedAsync(userId, messageId).catch(() => {});
+    this.trackReactionReceivedAsync(userId, messageId).catch(error => {
+      Logger.error('trackReactionReceived async error', error);
+    });
   }
 
   private async trackReactionReceivedAsync(userId: string, messageId: string): Promise<void> {

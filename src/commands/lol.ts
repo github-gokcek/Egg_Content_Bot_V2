@@ -93,6 +93,13 @@ module.exports = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // EMERGENCY: Firebase quota exceeded - LOL komutları geçici olarak devre dışı
+    await interaction.reply({
+      content: '⚠️ LOL komutları geçici olarak bakımdadır. Lütfen daha sonra tekrar deneyin.',
+      ephemeral: true
+    });
+    return;
+    
     await interaction.deferReply();
 
     const subcommand = interaction.options.getSubcommand();

@@ -91,7 +91,7 @@ client.once('ready', (client) => {
       if (adChannelId) {
         try {
           const channel = await client.channels.fetch(adChannelId);
-          if (channel && channel.isTextBased()) {
+          if (channel && channel.isTextBased() && 'send' in channel) {
             const imagePath = path.join(process.cwd(), 'assetler', 'Ninja.png');
             
             if (!existsSync(imagePath)) {

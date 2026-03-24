@@ -25,9 +25,9 @@ async function getAdTimer() {
     const docSnap = await (0, firestore_1.getDoc)(docRef);
     if (docSnap.exists()) {
         const data = docSnap.data();
-        return data.adTimerMinutes || 30;
+        return data.adTimerMinutes || 120; // Default 2 saat (120 dakika)
     }
-    return 30;
+    return 120; // Default 2 saat
 }
 async function setAdTimer(minutes) {
     const docRef = (0, firestore_1.doc)(firebase_1.db, SETTINGS_DOC);

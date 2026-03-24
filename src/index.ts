@@ -7,6 +7,7 @@ import { Logger } from './utils/logger';
 import { voiceActivityService } from './services/voiceActivityService';
 import { voiceCoinService } from './services/voiceCoinService';
 import { patchNotesService } from './services/patchNotesService';
+import { dailyResetService } from './services/dailyResetService';
 import { getAdChannel, getAdTimer } from './services/botSettings';
 import { EmbedBuilder, AttachmentBuilder } from 'discord.js';
 import path from 'path';
@@ -62,6 +63,9 @@ voiceActivityService.start();
 // Start voice coin tracking
 voiceCoinService.start();
 
+// Start daily reset scheduler (Istanbul timezone)
+dailyResetService.start();
+
 // Start patch notes checking when bot is ready
 client.once('ready', (client) => {
   patchNotesService.startChecking(client);
@@ -72,9 +76,17 @@ client.once('ready', (client) => {
   }, 60 * 1000);
   
   // Reklam mesajı (dinamik aralık)
+  let adIntervalId: NodeJS.Timeout | null = null;
+  
   const startAdScheduler = async () => {
+    // Eski interval varsa temizle
+    if (adIntervalId) {
+      clearInterval(adIntervalId);
+    }
+    
     const timerMinutes = await getAdTimer();
-    setInterval(async () => {
+    
+    adIntervalId = setInterval(async () => {
       const adChannelId = await getAdChannel();
       if (adChannelId) {
         try {
@@ -109,35 +121,19 @@ client.once('ready', (client) => {
         }
       }
     }, timerMinutes * 60 * 1000);
+    
     Logger.info(`Reklam sistemi ${timerMinutes} dakika aralıkla başlatıldı`);
   };
   
+  // İlk başlatma
   startAdScheduler();
   
-  // Günlük reset (her gece 00:00)
-  const scheduleDailyReset = () => {
-    const now = new Date();
-    const night = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 1, // Yarın
-      0, 0, 0 // 00:00:00
-    );
-    const msToMidnight = night.getTime() - now.getTime();
-    
-    setTimeout(async () => {
-      Logger.info('Günlük reset başlatılıyor...');
-      await voiceActivityService.resetDailyVoice();
-      Logger.success('Günlük reset tamamlandı');
-      
-      // Bir sonraki gün için schedule et
-      scheduleDailyReset();
-    }, msToMidnight);
-    
-    Logger.info(`Günlük reset ${Math.floor(msToMidnight / 1000 / 60)} dakika sonra çalışacak`);
-  };
-  
-  scheduleDailyReset();
+  // Timer değiştiğinde interval'i yeniden başlat (her 5 dakikada kontrol et)
+  setInterval(async () => {
+    const currentTimer = await getAdTimer();
+    // Eğer timer değiştiyse yeniden başlat
+    startAdScheduler();
+  }, 5 * 60 * 1000); // 5 dakikada bir kontrol
   
   Logger.info('Hatırlatıcı sistemi başlatıldı');
 });

@@ -70,14 +70,45 @@ export interface TftMatch {
   threadId?: string;
 }
 
+export interface DailyStats {
+  date: string; // YYYY-MM-DD format
+  lastReset: Date;
+  // Casino
+  slotPlays: number;
+  coinflipPlays: number;
+  crashPlays: number;
+  blackjackPlays: number;
+  minesPlays: number;
+  casinoWins: number;
+  casinoSpent: number;
+  // Voice
+  voiceMinutes: number;
+  // Social
+  messagesCount: number;
+  reactionsGiven: number;
+  reactionsReceived: number;
+  mentionsGiven: Set<string>; // unique user IDs
+  repliesGiven: Set<string>; // unique user IDs
+  emojisUsed: Set<string>; // unique emoji names
+  channelsUsed: Set<string>; // unique channel IDs
+  hourlyActivity: Set<number>; // hours 0-23
+}
+
+export interface TotalStats {
+  voiceMinutesTotal: number;
+  casinoWinsTotal: number;
+}
+
 export interface Player {
   discordId: string;
   username: string;
   lolIgn?: string;
   tftIgn?: string;
-  balance: number; // Bakiye sistemi
-  voicePackets: number; // Ses paketleri (her 5 dakika = 1 paket)
+  balance: number;
+  voicePackets: number;
   createdAt: Date;
+  dailyStats?: DailyStats;
+  totalStats?: TotalStats;
   stats: {
     lol: {
       wins: number;

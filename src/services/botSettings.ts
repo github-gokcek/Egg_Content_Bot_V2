@@ -31,10 +31,10 @@ export async function getAdTimer(): Promise<number> {
   
   if (docSnap.exists()) {
     const data = docSnap.data() as BotSettings;
-    return data.adTimerMinutes || 30;
+    return data.adTimerMinutes || 120; // Default 2 saat (120 dakika)
   }
   
-  return 30;
+  return 120; // Default 2 saat
 }
 
 export async function setAdTimer(minutes: number): Promise<void> {

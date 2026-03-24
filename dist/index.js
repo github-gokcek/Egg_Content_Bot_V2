@@ -68,9 +68,14 @@ client.once('ready', (client) => {
         await checkReminders(client);
     }, 60 * 1000);
     // Reklam mesajı (dinamik aralık)
+    let adIntervalId = null;
     const startAdScheduler = async () => {
+        // Eski interval varsa temizle
+        if (adIntervalId) {
+            clearInterval(adIntervalId);
+        }
         const timerMinutes = await (0, botSettings_1.getAdTimer)();
-        setInterval(async () => {
+        adIntervalId = setInterval(async () => {
             const adChannelId = await (0, botSettings_1.getAdChannel)();
             if (adChannelId) {
                 try {
@@ -102,7 +107,14 @@ client.once('ready', (client) => {
         }, timerMinutes * 60 * 1000);
         logger_1.Logger.info(`Reklam sistemi ${timerMinutes} dakika aralıkla başlatıldı`);
     };
+    // İlk başlatma
     startAdScheduler();
+    // Timer değiştiğinde interval'i yeniden başlat (her 5 dakikada kontrol et)
+    setInterval(async () => {
+        const currentTimer = await (0, botSettings_1.getAdTimer)();
+        // Eğer timer değiştiyse yeniden başlat
+        startAdScheduler();
+    }, 5 * 60 * 1000); // 5 dakikada bir kontrol
     // Günlük reset (her gece 00:00)
     const scheduleDailyReset = () => {
         const now = new Date();

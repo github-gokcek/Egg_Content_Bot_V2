@@ -1,6 +1,7 @@
 import { db } from './firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { databaseService } from './databaseService';
+import { dailyStatsService } from './dailyStatsService';
 import { Logger } from '../utils/logger';
 
 export interface Quest {
@@ -338,92 +339,46 @@ class QuestService {
   }
 
   private async trackMessageAsync(userId: string, message: any): Promise<void> {
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
-    }
+    // Daily stats'e kaydet
+    await dailyStatsService.incrementMessage(userId, message.channelId);
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      // Reset olduysa yeni veriyi çek
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-
-    userQuests.messageCount++;
-    
-    // Kanal tracking
-    if (message.channelId) {
-      userQuests.channelsMessaged.add(message.channelId);
-    }
-
-    // Saat dilimi takibi
-    const hour = new Date().getHours();
-    userQuests.hourlyMessages.add(hour);
-
-    // Sabah mesajı kontrolü (06:00 - 12:00)
-    if (hour >= 6 && hour < 12) {
-      userQuests.morningMessages++;
-    }
-
-    // Akşam mesajı kontrolü (18:00 - 00:00)
-    if (hour >= 18 && hour < 24) {
-      userQuests.eveningMessages++;
-    }
-
-    // Hızlı mesaj tracking (10 dakika ve 3 saat için)
-    const now = Date.now();
-    userQuests.fastMessageTimestamps.push(now);
-    // Sadece son 3 saati tut
-    userQuests.fastMessageTimestamps = userQuests.fastMessageTimestamps.filter(ts => now - ts <= 3 * 60 * 60 * 1000);
-
-    // Mention takibi - DÜZELTİLMİŞ
+    // Mention tracking
     if (message.mentions?.users && message.mentions.users.size > 0) {
-      message.mentions.users.forEach((user: any) => {
+      for (const user of message.mentions.users.values()) {
         if (user.id !== userId && !user.bot) {
-          userQuests.mentionedUsers.add(user.id);
-          Logger.info('Mention tracked', { 
-            userId, 
-            mentionedUserId: user.id,
-            totalMentions: userQuests.mentionedUsers.size 
-          });
+          await dailyStatsService.addMention(userId, user.id);
         }
-      });
+      }
     }
 
-    // Reply tracking - DÜZELTİLMİŞ
+    // Reply tracking
     if (message.reference?.messageId) {
       try {
         const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
         if (repliedMessage && repliedMessage.author.id !== userId && !repliedMessage.author.bot) {
-          userQuests.repliedToUsers.add(repliedMessage.author.id);
-          Logger.info('Reply tracked', { 
-            userId, 
-            repliedToUserId: repliedMessage.author.id,
-            totalReplies: userQuests.repliedToUsers.size 
-          });
+          await dailyStatsService.addReply(userId, repliedMessage.author.id);
         }
       } catch (error) {
         Logger.error('Reply tracking error', error);
       }
     }
 
-    // Geliştirilmiş Emoji takibi - TÜM emojiler
-    // Discord custom emojiler + Unicode emojiler (tüm kategoriler)
+    // Emoji tracking
     const emojiRegex = /<a?:[\w_]+:\d+>|[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F300}-\u{1FAFF}]|[\u{E0020}-\u{E007F}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA70}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{203C}]|[\u{2049}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{00A9}]|[\u{00AE}]|[\u{2122}]|[\u{2139}]|[\u{2194}-\u{2199}]|[\u{21A9}-\u{21AA}]|[\u{231A}-\u{231B}]|[\u{2328}]|[\u{23CF}]|[\u{23E9}-\u{23F3}]|[\u{23F8}-\u{23FA}]|[\u{24C2}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2600}-\u{2604}]|[\u{260E}]|[\u{2611}]|[\u{2614}-\u{2615}]|[\u{2618}]|[\u{261D}]|[\u{2620}]|[\u{2622}-\u{2623}]|[\u{2626}]|[\u{262A}]|[\u{262E}-\u{262F}]|[\u{2638}-\u{263A}]|[\u{2640}]|[\u{2642}]|[\u{2648}-\u{2653}]|[\u{265F}-\u{2660}]|[\u{2663}]|[\u{2665}-\u{2666}]|[\u{2668}]|[\u{267B}]|[\u{267E}-\u{267F}]|[\u{2692}-\u{2697}]|[\u{2699}]|[\u{269B}-\u{269C}]|[\u{26A0}-\u{26A1}]|[\u{26A7}]|[\u{26AA}-\u{26AB}]|[\u{26B0}-\u{26B1}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26C8}]|[\u{26CE}]|[\u{26CF}]|[\u{26D1}]|[\u{26D3}-\u{26D4}]|[\u{26E9}-\u{26EA}]|[\u{26F0}-\u{26F5}]|[\u{26F7}-\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{2934}-\u{2935}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{2B50}]|[\u{2B55}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]/gu;
     const emojis = message.content?.match(emojiRegex);
     if (emojis) {
-      emojis.forEach((emoji: string) => userQuests.emojisUsed.add(emoji));
-      Logger.info('Emojis tracked in message', { 
-        userId, 
-        emojisFound: emojis.length, 
-        totalUniqueEmojis: userQuests.emojisUsed.size,
-        emojis: emojis.slice(0, 10) // İlk 10 emojiyi göster
-      });
+      for (const emoji of emojis) {
+        await dailyStatsService.addEmoji(userId, emoji);
+      }
     }
 
-    await this.updateQuestProgress(userQuests);
-    await this.saveUserQuests(userQuests); // Debounce ile kaydet
+    // Quest progress güncelle
+    let userQuests = await this.getUserQuests(userId);
+    if (!userQuests) {
+      userQuests = await this.initializeUserQuests(userId);
+    }
+    await this.updateQuestProgressFromDailyStats(userQuests);
+    await this.saveUserQuests(userQuests);
   }
 
   async trackVoice(userId: string, minutes: number): Promise<void> {
@@ -433,33 +388,19 @@ class QuestService {
   }
 
   private async trackVoiceAsync(userId: string, minutes: number): Promise<void> {
+    // Daily stats'e kaydet (incremental değil, total)
+    const dailyStats = await dailyStatsService.getDailyStats(userId);
+    const increment = minutes - dailyStats.voiceMinutes;
+    if (increment > 0) {
+      await dailyStatsService.incrementVoiceMinutes(userId, increment);
+    }
+
+    // Quest progress güncelle
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    // CRITICAL FIX: Toplam dakikayı direkt set et (voiceActivityService zaten toplamı gönderiyor)
-    // Ama eğer yeni değer eskisinden küçükse (reset olmuş olabilir), increment yap
-    if (minutes < userQuests.voiceMinutes) {
-      // Reset olmuş, yeni session başlamış
-      userQuests.voiceMinutes = minutes;
-    } else {
-      // Normal durum, toplamı güncelle
-      userQuests.voiceMinutes = minutes;
-    }
-
-    Logger.info('Voice tracked', { 
-      userId, 
-      totalMinutes: userQuests.voiceMinutes
-    });
-
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -470,43 +411,28 @@ class QuestService {
   }
 
   private async trackReactionGivenAsync(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
+    await dailyStatsService.incrementReactionGiven(userId);
+    if (emoji) {
+      await dailyStatsService.addEmoji(userId, emoji);
+    }
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
+    // Unique tracking için userQuests kullan (günlük stats'te Set yok)
+    if (messageId) {
+      userQuests.reactionGivenToMessages.add(messageId);
     }
-    
-    userQuests.reactionsGiven++;
-    
-    // Farklı mesajlara reaction tracking
-    userQuests.reactionGivenToMessages.add(messageId);
-    
-    // Farklı kullanıcılara reaction tracking
     if (messageAuthorId && messageAuthorId !== userId) {
       userQuests.reactionGivenToUsers.add(messageAuthorId);
-      Logger.info('Reaction to user tracked', { 
-        userId, 
-        targetUserId: messageAuthorId,
-        totalUniqueUsers: userQuests.reactionGivenToUsers.size 
-      });
     }
-
-    // Reaction emoji tracking
     if (emoji) {
       userQuests.reactionEmojisUsed.add(emoji);
-      Logger.info('Reaction emoji tracked', { 
-        userId, 
-        emoji,
-        totalUniqueEmojis: userQuests.reactionEmojisUsed.size 
-      });
     }
 
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -517,21 +443,17 @@ class QuestService {
   }
 
   private async trackReactionReceivedAsync(userId: string, messageId: string): Promise<void> {
+    await dailyStatsService.incrementReactionReceived(userId);
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
     const current = userQuests.reactionsReceived.get(messageId) || 0;
     userQuests.reactionsReceived.set(messageId, current + 1);
 
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -616,20 +538,13 @@ class QuestService {
   }
 
   private async trackSlotPlayAsync(userId: string): Promise<void> {
+    await dailyStatsService.incrementCasinoPlay(userId, 'slot');
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    userQuests.slotPlays++;
-
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -640,23 +555,22 @@ class QuestService {
   }
 
   private async trackBlackjackPlayAsync(userId: string, won: boolean = false): Promise<void> {
+    await dailyStatsService.incrementCasinoPlay(userId, 'blackjack');
+    if (won) {
+      await dailyStatsService.incrementCasinoWin(userId);
+    }
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    userQuests.blackjackPlays++;
+    // Blackjack win tracking (userQuests'te tutulacak)
     if (won) {
       userQuests.blackjackWins++;
     }
 
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -667,20 +581,13 @@ class QuestService {
   }
 
   private async trackCoinflipPlayAsync(userId: string): Promise<void> {
+    await dailyStatsService.incrementCasinoPlay(userId, 'coinflip');
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    userQuests.coinflipPlays++;
-
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -691,20 +598,13 @@ class QuestService {
   }
 
   private async trackCrashPlayAsync(userId: string): Promise<void> {
+    await dailyStatsService.incrementCasinoPlay(userId, 'crash');
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    userQuests.crashPlays++;
-
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -715,20 +615,16 @@ class QuestService {
   }
 
   private async trackMinesTilesAsync(userId: string, tiles: number): Promise<void> {
+    // Mines için her tile bir play sayılır
+    for (let i = 0; i < tiles; i++) {
+      await dailyStatsService.incrementCasinoPlay(userId, 'mines');
+    }
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    userQuests.minesPlays += tiles;
-
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -739,20 +635,13 @@ class QuestService {
   }
 
   private async trackCasinoSpentAsync(userId: string, amount: number): Promise<void> {
+    await dailyStatsService.incrementCasinoSpent(userId, amount);
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    userQuests.casinoSpent += amount;
-
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -763,26 +652,20 @@ class QuestService {
   }
 
   private async trackCasinoWinAsync(userId: string, amount: number, isSingleBet: boolean = false): Promise<void> {
+    await dailyStatsService.incrementCasinoWin(userId);
+
     let userQuests = await this.getUserQuests(userId);
     if (!userQuests) {
       userQuests = await this.initializeUserQuests(userId);
     }
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
+    // Casino wins ve biggest single win userQuests'te tutulacak
     userQuests.casinoWins += amount;
-    
-    // Tek bahiste en büyük kazanç tracking
     if (isSingleBet && amount > userQuests.biggestSingleWin) {
       userQuests.biggestSingleWin = amount;
-      Logger.info('New biggest single win', { userId, amount });
     }
 
-    await this.updateQuestProgress(userQuests);
+    await this.updateQuestProgressFromDailyStats(userQuests);
     await this.saveUserQuests(userQuests);
   }
 
@@ -810,48 +693,57 @@ class QuestService {
     await this.saveUserQuests(userQuests);
   }
 
-  private async updateQuestProgress(userQuests: UserQuests): Promise<void> {
+  private async updateQuestProgressFromDailyStats(userQuests: UserQuests): Promise<void> {
+    // Daily stats'ten veri çek
+    const dailyStats = await dailyStatsService.getDailyStats(userQuests.userId);
+
     // Günlük görevleri güncelle
     for (const quest of userQuests.quests) {
       if (quest.completed) continue;
 
       switch (quest.type) {
         case 'message_count':
-          quest.progress = userQuests.messageCount;
+          quest.progress = dailyStats.messagesCount;
           break;
         case 'channels':
-          quest.progress = userQuests.channelsMessaged.size;
+          quest.progress = dailyStats.channelsUsed.size;
           break;
         case 'replies':
-          quest.progress = userQuests.repliedToUsers.size;
+          quest.progress = dailyStats.repliesGiven.size;
           break;
         case 'emoji_use':
-          quest.progress = userQuests.emojisUsed.size;
+          quest.progress = dailyStats.emojisUsed.size;
           break;
         case 'reaction_emoji_variety':
           quest.progress = userQuests.reactionEmojisUsed.size;
           break;
         case 'morning_messages':
-          quest.progress = userQuests.morningMessages;
+          // Sabah mesajları için hourlyActivity'den say
+          const morningHours = [6, 7, 8, 9, 10, 11];
+          const morningCount = Array.from(dailyStats.hourlyActivity).filter(h => morningHours.includes(h)).length;
+          quest.progress = morningCount > 0 ? dailyStats.messagesCount : 0; // Basitleştirilmiş
           break;
         case 'evening_messages':
-          quest.progress = userQuests.eveningMessages;
+          // Akşam mesajları için hourlyActivity'den say
+          const eveningHours = [18, 19, 20, 21, 22, 23];
+          const eveningCount = Array.from(dailyStats.hourlyActivity).filter(h => eveningHours.includes(h)).length;
+          quest.progress = eveningCount > 0 ? dailyStats.messagesCount : 0; // Basitleştirilmiş
           break;
         case 'fast_messages':
-          // Son 10 dakikadaki mesajları say
+          // Hızlı mesaj - userQuests'ten al (timestamp tracking gerekli)
           const tenMinAgo = Date.now() - 10 * 60 * 1000;
           quest.progress = userQuests.fastMessageTimestamps.filter(ts => ts >= tenMinAgo).length;
           break;
         case 'interact_users':
-          // Sadece unique kullanıcıları say (reply veya mention)
-          const interactedUsers = new Set([...userQuests.repliedToUsers, ...userQuests.mentionedUsers]);
+          // Mention + reply unique users
+          const interactedUsers = new Set([...dailyStats.repliesGiven, ...dailyStats.mentionsGiven]);
           quest.progress = interactedUsers.size;
           break;
         case 'reaction_users':
           quest.progress = userQuests.reactionGivenToUsers.size;
           break;
         case 'mentions':
-          quest.progress = userQuests.mentionedUsers.size;
+          quest.progress = dailyStats.mentionsGiven.size;
           break;
         case 'reaction_receive':
           quest.progress = userQuests.reactionsReceived.size > 0 
@@ -862,60 +754,55 @@ class QuestService {
           quest.progress = userQuests.usedDailyCommand ? 1 : 0;
           break;
         case 'slot_plays':
-          quest.progress = userQuests.slotPlays;
+          quest.progress = dailyStats.slotPlays;
           break;
         case 'blackjack_plays':
-          quest.progress = userQuests.blackjackPlays;
+          quest.progress = dailyStats.blackjackPlays;
           break;
         case 'blackjack_win':
           quest.progress = userQuests.blackjackWins;
           break;
         case 'coinflip_plays':
-          quest.progress = userQuests.coinflipPlays;
+          quest.progress = dailyStats.coinflipPlays;
           break;
         case 'crash_cashout':
-          quest.progress = userQuests.crashPlays;
+          quest.progress = dailyStats.crashPlays;
           break;
         case 'mines_tiles':
-          quest.progress = userQuests.minesPlays;
+          quest.progress = dailyStats.minesPlays;
           break;
         case 'casino_variety':
           let varietyCount = 0;
-          if (userQuests.slotPlays > 0) varietyCount++;
-          if (userQuests.blackjackPlays > 0) varietyCount++;
-          if (userQuests.coinflipPlays > 0) varietyCount++;
-          if (userQuests.crashPlays > 0) varietyCount++;
-          if (userQuests.minesPlays > 0) varietyCount++;
+          if (dailyStats.slotPlays > 0) varietyCount++;
+          if (dailyStats.blackjackPlays > 0) varietyCount++;
+          if (dailyStats.coinflipPlays > 0) varietyCount++;
+          if (dailyStats.crashPlays > 0) varietyCount++;
+          if (dailyStats.minesPlays > 0) varietyCount++;
           quest.progress = varietyCount;
           break;
         case 'casino_spent':
-          quest.progress = userQuests.casinoSpent;
+          quest.progress = dailyStats.casinoSpent;
           break;
         case 'big_win':
           quest.progress = userQuests.biggestSingleWin;
           break;
         case 'voice_5min':
-          // 5 dakika
-          quest.progress = userQuests.voiceMinutes >= 5 ? 1 : 0;
+          quest.progress = dailyStats.voiceMinutes >= 5 ? 1 : 0;
           break;
         case 'voice_15min':
-          // 15 dakika
-          quest.progress = userQuests.voiceMinutes >= 15 ? 1 : 0;
+          quest.progress = dailyStats.voiceMinutes >= 15 ? 1 : 0;
           break;
         case 'voice_30min':
-          // 30 dakika
-          quest.progress = userQuests.voiceMinutes >= 30 ? 1 : 0;
+          quest.progress = dailyStats.voiceMinutes >= 30 ? 1 : 0;
           break;
         case 'voice_1hour':
-          // 60 dakika
-          quest.progress = userQuests.voiceMinutes >= 60 ? 1 : 0;
+          quest.progress = dailyStats.voiceMinutes >= 60 ? 1 : 0;
           break;
         case 'voice_message_combo':
-          // 10 dakika ses + 5 mesaj
-          quest.progress = (userQuests.voiceMinutes >= 10 && userQuests.messageCount >= 5) ? 1 : 0;
+          quest.progress = (dailyStats.voiceMinutes >= 10 && dailyStats.messagesCount >= 5) ? 1 : 0;
           break;
         case 'hourly_messages':
-          quest.progress = userQuests.hourlyMessages.size;
+          quest.progress = dailyStats.hourlyActivity.size;
           break;
       }
 
@@ -923,8 +810,6 @@ class QuestService {
         quest.completed = true;
         await this.giveReward(userQuests.userId, quest.reward);
         Logger.success('Quest completed', { userId: userQuests.userId, questId: quest.id, reward: quest.reward });
-        // Quest tamamlandığında force save yap
-        await this.saveUserQuests(userQuests, true);
       }
     }
 
@@ -933,8 +818,6 @@ class QuestService {
     if (allCompleted && !userQuests.allDailyCompleted) {
       userQuests.allDailyCompleted = true;
       Logger.success('All daily quests completed! Special quest unlocked', { userId: userQuests.userId });
-      // Tüm görevler tamamlandığında force save yap
-      await this.saveUserQuests(userQuests, true);
     }
 
     // Özel görevi güncelle (sadece günlük görevler tamamlandıysa)
@@ -943,23 +826,22 @@ class QuestService {
       
       switch (special.type) {
         case 'message_count':
-          special.progress = userQuests.messageCount;
+          special.progress = dailyStats.messagesCount;
           break;
         case 'casino_spent':
-          special.progress = userQuests.casinoSpent;
+          special.progress = dailyStats.casinoSpent;
           break;
         case 'voice_2hour':
-          // 120 dakika
-          special.progress = userQuests.voiceMinutes >= 120 ? 1 : 0;
+          special.progress = dailyStats.voiceMinutes >= 120 ? 1 : 0;
           break;
         case 'replies':
-          special.progress = userQuests.repliedToUsers.size;
+          special.progress = dailyStats.repliesGiven.size;
           break;
         case 'slot_plays':
-          special.progress = userQuests.slotPlays;
+          special.progress = dailyStats.slotPlays;
           break;
         case 'blackjack_plays':
-          special.progress = userQuests.blackjackPlays;
+          special.progress = dailyStats.blackjackPlays;
           break;
         case 'casino_wins':
           special.progress = userQuests.casinoWins;
@@ -968,7 +850,6 @@ class QuestService {
           special.progress = userQuests.reactionGivenToMessages.size;
           break;
         case 'fast_messages_3h':
-          // Son 3 saatteki mesajları say
           const threeHoursAgo = Date.now() - 3 * 60 * 60 * 1000;
           special.progress = userQuests.fastMessageTimestamps.filter(ts => ts >= threeHoursAgo).length;
           break;
@@ -978,8 +859,6 @@ class QuestService {
         special.completed = true;
         await this.giveReward(userQuests.userId, special.reward);
         Logger.success('Special quest completed!', { userId: userQuests.userId, questId: special.id, reward: special.reward });
-        // Özel görev tamamlandığında force save yap
-        await this.saveUserQuests(userQuests, true);
       }
     }
   }

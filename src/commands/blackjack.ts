@@ -3,7 +3,6 @@ import { databaseService } from '../services/databaseService';
 import { questService } from '../services/questService';
 import { db } from '../services/firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-import { autoDeleteMessage } from '../utils/messageCleanup';
 
 interface BlackjackGame {
   userId: string;
@@ -66,32 +65,30 @@ module.exports = {
         .setMinValue(10)),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+    
     const amount = interaction.options.getInteger('miktar', true);
 
     const player = await databaseService.getPlayer(interaction.user.id);
     if (!player) {
-      return interaction.reply({
-        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!'
       });
     }
 
     if (player.balance < amount) {
-      return interaction.reply({
-        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`
       });
     }
 
-    // Bahsi çıkar
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
-    // Quest tracking - Blackjack play ve casino spent
-    await questService.trackBlackjackPlay(interaction.user.id);
-    await questService.trackCasinoSpent(interaction.user.id, amount);
+    // Quest tracking - Non-blocking
+    questService.trackBlackjackPlay(interaction.user.id).catch(() => {});
+    questService.trackCasinoSpent(interaction.user.id, amount).catch(() => {});
 
-    // Oyun başlat
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     
@@ -110,19 +107,17 @@ module.exports = {
 
     await setDoc(doc(db, 'blackjackGames', interaction.user.id), game);
 
-    // Blackjack kontrolü
     if (playerValue === 21) {
       await deleteDoc(doc(db, 'blackjackGames', interaction.user.id));
       
-      // Blackjack: 2.5x ödeme (bahis + 1.5x kazanç)
       const winAmount = Math.floor(amount * 2.5);
       player.balance += winAmount;
       await databaseService.updatePlayer(player);
 
-      // Quest tracking - Blackjack WIN ve Casino win
-      await questService.trackBlackjackPlay(interaction.user.id, true);
+      // Quest tracking - Non-blocking
+      questService.trackBlackjackPlay(interaction.user.id, true).catch(() => {});
       const netWin = winAmount - amount;
-      await questService.trackCasinoWin(interaction.user.id, netWin, true);
+      questService.trackCasinoWin(interaction.user.id, netWin, true).catch(() => {});
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
@@ -135,7 +130,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
+      return interaction.editReply({ embeds: [embed] });
     }
 
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -168,6 +163,6 @@ module.exports = {
       .setFooter({ text: 'Hit: Kart çek | Stand: Dur | Double: Bahsi ikiye katla' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], components: [buttons] });
+    await interaction.editReply({ embeds: [embed], components: [buttons] });
   },
 };

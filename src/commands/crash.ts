@@ -14,8 +14,6 @@ interface CrashGame {
   messageId?: string;
 }
 
-// Ev avantajı için crash point hesaplama
-// Average crash: ~1.45x, Median crash: ~1.30x
 function generateCrashPoint(): number {
   const r = Math.random();
 
@@ -57,41 +55,37 @@ module.exports = {
         .setMinValue(10)),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+    
     const amount = interaction.options.getInteger('miktar', true);
 
     const player = await databaseService.getPlayer(interaction.user.id);
     if (!player) {
-      return interaction.reply({
-        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!'
       });
     }
 
     if (player.balance < amount) {
-      return interaction.reply({
-        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`
       });
     }
 
-    // Aktif oyun kontrolü
     const existingGame = await getDoc(doc(db, 'crashGames', interaction.user.id));
     if (existingGame.exists()) {
-      return interaction.reply({
-        content: '❌ Zaten aktif bir Crash oyununuz var!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Zaten aktif bir Crash oyununuz var!'
       });
     }
 
-    // Crash point'i önceden belirle
     const crashPoint = generateCrashPoint();
     
-    // Bahsi hemen çıkar
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
-    // Quest tracking - Casino spent
-    await questService.trackCasinoSpent(interaction.user.id, amount);
+    // Quest tracking - Non-blocking
+    questService.trackCasinoSpent(interaction.user.id, amount).catch(() => {});
 
     const game: CrashGame = {
       userId: interaction.user.id,
@@ -122,15 +116,14 @@ module.exports = {
       .setFooter({ text: 'Cashout butonuna basarak kazancını al!' })
       .setTimestamp();
 
-    const reply = await interaction.reply({ embeds: [embed], components: [cashoutButton], fetchReply: true });
+    const reply = await interaction.editReply({ embeds: [embed], components: [cashoutButton] });
     
     game.messageId = reply.id;
     await setDoc(doc(db, 'crashGames', interaction.user.id), game);
 
-    // Crash simulasyonu başla
     let currentMultiplier = 1.0;
-    const updateInterval = 100; // 100ms'de bir güncelle (daha smooth)
-    const incrementPerUpdate = 0.01; // Her 100ms'de 0.01 artır
+    const updateInterval = 100;
+    const incrementPerUpdate = 0.01;
     
     const crashInterval = setInterval(async () => {
       try {
@@ -143,7 +136,6 @@ module.exports = {
 
         const gameData = gameDoc.data() as CrashGame;
 
-        // Eğer zaten crashed ise interval'i durdur
         if (gameData.crashed) {
           clearInterval(crashInterval);
           return;
@@ -151,11 +143,9 @@ module.exports = {
 
         currentMultiplier += incrementPerUpdate;
 
-        // Crash oldu mu kontrol et
         if (currentMultiplier >= gameData.crashPoint) {
           currentMultiplier = gameData.crashPoint;
           
-          // Oyunu crashed olarak işaretle
           await setDoc(doc(db, 'crashGames', interaction.user.id), {
             ...gameData,
             crashed: true
@@ -163,7 +153,6 @@ module.exports = {
 
           clearInterval(crashInterval);
 
-          // Crash mesajını gönder
           const crashEmbed = new EmbedBuilder()
             .setColor(0xff0000)
             .setTitle(`💥 ${gameData.crashPoint.toFixed(2)}x'de CRASH OLDU!`)
@@ -181,12 +170,10 @@ module.exports = {
             Logger.error('Crash mesajı güncellenemedi', error);
           }
 
-          // Oyunu sil
           await deleteDoc(doc(db, 'crashGames', interaction.user.id));
           return;
         }
 
-        // Her 500ms'de bir mesajı güncelle (Discord rate limit'i için)
         if (Math.floor(currentMultiplier * 100) % 5 === 0) {
           const potentialWin = Math.floor(amount * currentMultiplier);
 
@@ -214,7 +201,6 @@ module.exports = {
       }
     }, updateInterval);
 
-    // 60 saniye sonra otomatik olarak oyunu sonlandır
     setTimeout(async () => {
       clearInterval(crashInterval);
       

@@ -7,7 +7,7 @@ import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 interface MinesGame {
   userId: string;
   bet: number;
-  grid: boolean[]; // true = mine, false = safe
+  grid: boolean[];
   revealed: boolean[];
   safeRevealed: number;
   totalMines: number;
@@ -15,7 +15,7 @@ interface MinesGame {
 }
 
 function generateGrid(totalMines: number = 5): boolean[] {
-  const grid = new Array(20).fill(false); // 4x5 = 20 kare
+  const grid = new Array(20).fill(false);
   const minePositions = new Set<number>();
   
   while (minePositions.size < totalMines) {
@@ -27,20 +27,13 @@ function generateGrid(totalMines: number = 5): boolean[] {
 }
 
 function calculateMultiplier(safeRevealed: number, totalMines: number): number {
-  // Basit ve doğru formül
-  // Teorik: multiplier = total_tiles / remaining_safe_tiles
-  // %10 house edge: multiplier = theoretical * 0.90
-  
-  const totalTiles = 20; // 4x5 grid
+  const totalTiles = 20;
   const totalSafeTiles = totalTiles - totalMines;
   const remainingSafeTiles = totalSafeTiles - safeRevealed;
   
   if (remainingSafeTiles <= 0) return 1.0;
   
-  // Teorik multiplier
   const theoretical = totalTiles / remainingSafeTiles;
-  
-  // %10 house edge uygula
   const multiplier = theoretical * 0.90;
   
   return multiplier;
@@ -49,7 +42,6 @@ function calculateMultiplier(safeRevealed: number, totalMines: number): number {
 function createGridButtons(game: MinesGame, disabled: boolean = false): ActionRowBuilder<ButtonBuilder>[] {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   
-  // 4 satır x 5 sütun = 20 kare
   for (let row = 0; row < 4; row++) {
     const actionRow = new ActionRowBuilder<ButtonBuilder>();
     
@@ -80,7 +72,6 @@ function createGridButtons(game: MinesGame, disabled: boolean = false): ActionRo
     rows.push(actionRow);
   }
   
-  // 5. satır: Cashout butonu
   const cashoutRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('mines_cashout')
@@ -110,30 +101,28 @@ module.exports = {
         .setMaxValue(10)),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+    
     const amount = interaction.options.getInteger('miktar', true);
     const totalMines = interaction.options.getInteger('mayinlar') || 5;
 
     const player = await databaseService.getPlayer(interaction.user.id);
     if (!player) {
-      return interaction.reply({
-        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!'
       });
     }
 
     if (player.balance < amount) {
-      return interaction.reply({
-        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`
       });
     }
 
-    // Aktif oyun kontrolü
     const existingGame = await getDoc(doc(db, 'minesGames', interaction.user.id));
     if (existingGame.exists()) {
-      return interaction.reply({
-        content: '❌ Zaten aktif bir Mines oyununuz var!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Zaten aktif bir Mines oyununuz var!'
       });
     }
 
@@ -141,7 +130,7 @@ module.exports = {
       userId: interaction.user.id,
       bet: amount,
       grid: generateGrid(totalMines),
-      revealed: new Array(20).fill(false), // 4x5 = 20
+      revealed: new Array(20).fill(false),
       safeRevealed: 0,
       totalMines,
       multiplier: 1.0
@@ -149,12 +138,11 @@ module.exports = {
 
     await setDoc(doc(db, 'minesGames', interaction.user.id), game);
 
-    // Bahsi düş
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
-    // Quest tracking - Casino spent
-    await questService.trackCasinoSpent(interaction.user.id, amount);
+    // Quest tracking - Non-blocking
+    questService.trackCasinoSpent(interaction.user.id, amount).catch(() => {});
 
     const buttons = createGridButtons(game);
 
@@ -171,6 +159,6 @@ module.exports = {
       .setFooter({ text: 'Karelere tıklayarak aç! Mayına basarsan kaybedersin!' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], components: buttons });
+    await interaction.editReply({ embeds: [embed], components: buttons });
   },
 };

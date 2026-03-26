@@ -41,20 +41,20 @@ module.exports = {
         .setMinValue(10)),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+    
     const amount = interaction.options.getInteger('miktar', true);
 
     const player = await databaseService.getPlayer(interaction.user.id);
     if (!player) {
-      return interaction.reply({
-        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!'
       });
     }
 
     if (player.balance < amount) {
-      return interaction.reply({
-        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`
       });
     }
 
@@ -62,9 +62,9 @@ module.exports = {
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
-    // Quest tracking - Slot play ve casino spent
-    await questService.trackSlotPlay(interaction.user.id);
-    await questService.trackCasinoSpent(interaction.user.id, amount);
+    // Quest tracking - Non-blocking
+    questService.trackSlotPlay(interaction.user.id).catch(() => {});
+    questService.trackCasinoSpent(interaction.user.id, amount).catch(() => {});
 
     // Spin
     const slot1 = spinSlot();
@@ -86,7 +86,7 @@ module.exports = {
     } else if (slot1 === slot2 || slot2 === slot3 || slot1 === slot3) {
       // 2 aynı - küçük kazanç (ev avantajı için düşük)
       won = true;
-      multiplier = 1.2; // Önceki: 1.5
+      multiplier = 1.2;
       winAmount = Math.floor(amount * multiplier);
     }
 
@@ -95,10 +95,10 @@ module.exports = {
       player.balance += winAmount;
       await databaseService.updatePlayer(player);
 
-      // Quest tracking - Casino win
+      // Quest tracking - Non-blocking
       const netWin = winAmount - amount;
       if (netWin > 0) {
-        await questService.trackCasinoWin(interaction.user.id, netWin, true);
+        questService.trackCasinoWin(interaction.user.id, netWin, true).catch(() => {});
       }
 
       const embed = new EmbedBuilder()
@@ -113,7 +113,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
+      await interaction.editReply({ embeds: [embed] });
     } else {
       // Kaybetti (bahis zaten çıkarıldı)
       const embed = new EmbedBuilder()
@@ -127,7 +127,7 @@ module.exports = {
         .setFooter({ text: 'Şansını tekrar dene!' })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
+      await interaction.editReply({ embeds: [embed] });
     }
   },
 };

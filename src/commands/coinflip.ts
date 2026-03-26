@@ -1,7 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { databaseService } from '../services/databaseService';
 import { questService } from '../services/questService';
-import { autoDeleteMessage } from '../utils/messageCleanup';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,22 +23,22 @@ module.exports = {
         .setDescription('PvP için rakip (opsiyonel)')),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+    
     const amount = interaction.options.getInteger('miktar', true);
     const guess = interaction.options.getString('tahmin');
     const opponent = interaction.options.getUser('rakip');
 
     const player = await databaseService.getPlayer(interaction.user.id);
     if (!player) {
-      return interaction.reply({
-        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!',
-        ephemeral: true
+      return interaction.editReply({
+        content: '❌ Önce `/kayit` komutu ile kayıt olmalısınız!'
       });
     }
 
     if (player.balance < amount) {
-      return interaction.reply({
-        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `❌ Yetersiz bakiye! Mevcut: ${player.balance} 🪙`
       });
     }
 
@@ -47,56 +46,48 @@ module.exports = {
     player.balance -= amount;
     await databaseService.updatePlayer(player);
 
-    // Quest tracking - Coinflip play ve casino spent
-    await questService.trackCoinflipPlay(interaction.user.id);
-    await questService.trackCasinoSpent(interaction.user.id, amount);
+    // Quest tracking - Non-blocking
+    questService.trackCoinflipPlay(interaction.user.id).catch(() => {});
+    questService.trackCasinoSpent(interaction.user.id, amount).catch(() => {});
 
     // PvP Mode
     if (opponent) {
       if (opponent.id === interaction.user.id) {
-        return interaction.reply({
-          content: '❌ Kendinizle oynayamazsınız!',
-          ephemeral: true
+        return interaction.editReply({
+          content: '❌ Kendinizle oynayamazsınız!'
         });
       }
 
       if (opponent.bot) {
-        return interaction.reply({
-          content: '❌ Botlarla oynayamazsınız!',
-          ephemeral: true
+        return interaction.editReply({
+          content: '❌ Botlarla oynayamazsınız!'
         });
       }
 
       const opponentPlayer = await databaseService.getPlayer(opponent.id);
       if (!opponentPlayer) {
-        // Bahsi geri ver
         player.balance += amount;
         await databaseService.updatePlayer(player);
-        return interaction.reply({
-          content: `❌ ${opponent.username} henüz kayıt olmamış!`,
-          ephemeral: true
+        return interaction.editReply({
+          content: `❌ ${opponent.username} henüz kayıt olmamış!`
         });
       }
 
       if (opponentPlayer.balance < amount) {
-        // Bahsi geri ver
         player.balance += amount;
         await databaseService.updatePlayer(player);
-        return interaction.reply({
-          content: `❌ ${opponent.username} kullanıcısının bakiyesi yetersiz!`,
-          ephemeral: true
+        return interaction.editReply({
+          content: `❌ ${opponent.username} kullanıcısının bakiyesi yetersiz!`
         });
       }
 
-      // Rakibin bahsini çıkar
       opponentPlayer.balance -= amount;
       await databaseService.updatePlayer(opponentPlayer);
 
-      // Quest tracking for opponent
-      await questService.trackCoinflipPlay(opponent.id);
-      await questService.trackCasinoSpent(opponent.id, amount);
+      // Quest tracking for opponent - Non-blocking
+      questService.trackCoinflipPlay(opponent.id).catch(() => {});
+      questService.trackCasinoSpent(opponent.id, amount).catch(() => {});
 
-      // PvP Coinflip
       const result = Math.random() < 0.5 ? 'heads' : 'tails';
       const resultText = result === 'heads' ? '🪙 Yazı' : '🪙 Tura';
       
@@ -106,14 +97,13 @@ module.exports = {
       const winnerPlayer = winner.id === interaction.user.id ? player : opponentPlayer;
       const loserPlayer = winner.id === interaction.user.id ? opponentPlayer : player;
 
-      // Kazanana 2x bahis ver (kendi bahsi + rakibin bahsi)
       winnerPlayer.balance += amount * 2;
 
       await databaseService.updatePlayer(winnerPlayer);
       await databaseService.updatePlayer(loserPlayer);
 
-      // Quest tracking - Casino win
-      await questService.trackCasinoWin(winner.id, amount, true);
+      // Quest tracking - Non-blocking
+      questService.trackCasinoWin(winner.id, amount, true).catch(() => {});
 
       const embed = new EmbedBuilder()
         .setColor(0xffd700)
@@ -126,14 +116,11 @@ module.exports = {
         )
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
+      return interaction.editReply({ embeds: [embed] });
     }
 
-    // Solo Mode - Ev avantajı %60 (Önceki: %52)
-    let playerGuess: string;
-    
+    // Solo Mode
     if (!guess) {
-      // Tahmin yoksa butonlarla sor
       const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(`coinflip_heads_${amount}`)
@@ -145,24 +132,19 @@ module.exports = {
           .setStyle(ButtonStyle.Primary)
       );
 
-      return interaction.reply({
+      return interaction.editReply({
         content: `🪙 **${amount} 🪙** bahis ile Coinflip!\n\nTahmininizi seçin:`,
-        components: [buttons],
-        ephemeral: true
+        components: [buttons]
       });
     }
 
-    playerGuess = guess;
-
-    // Ev avantajı: %60 bot kazanır (Önceki: %52)
+    const playerGuess = guess;
     const houseWins = Math.random() < 0.60;
     let result: string;
     
     if (houseWins) {
-      // Bot kazanır - oyuncunun tahmininin tersi
       result = playerGuess === 'heads' ? 'tails' : 'heads';
     } else {
-      // Oyuncu kazanır
       result = playerGuess;
     }
 
@@ -170,12 +152,11 @@ module.exports = {
     const won = result === playerGuess;
 
     if (won) {
-      // Kazanç ver: 2x bahis (kendi bahsi + kazanç)
       player.balance += amount * 2;
       await databaseService.updatePlayer(player);
 
-      // Quest tracking - Casino win
-      await questService.trackCasinoWin(interaction.user.id, amount, true);
+      // Quest tracking - Non-blocking
+      questService.trackCasinoWin(interaction.user.id, amount, true).catch(() => {});
 
       const embed = new EmbedBuilder()
         .setColor(0x00ff00)
@@ -187,9 +168,8 @@ module.exports = {
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
+      await interaction.editReply({ embeds: [embed] });
     } else {
-      // Kaybetti (bahis zaten çıkarıldı)
       const embed = new EmbedBuilder()
         .setColor(0xff0000)
         .setTitle('💸 Coinflip - Kaybettin!')
@@ -200,7 +180,7 @@ module.exports = {
         )
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] }).then(msg => autoDeleteMessage(msg));
+      await interaction.editReply({ embeds: [embed] });
     }
   },
 };

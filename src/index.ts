@@ -8,7 +8,9 @@ import { voiceActivityService } from './services/voiceActivityService';
 import { voiceCoinService } from './services/voiceCoinService';
 import { patchNotesService } from './services/patchNotesService';
 import { dailyResetService } from './services/dailyResetService';
+import { firebaseMonitor } from './services/firebaseMonitor';
 import { getAdChannel, getAdTimer } from './services/botSettings';
+import { questTrackingQueue } from './services/questTrackingQueue';
 import { EmbedBuilder, AttachmentBuilder } from 'discord.js';
 import path from 'path';
 const { checkReminders } = require('./commands/hatirlat');
@@ -66,8 +68,17 @@ voiceCoinService.start();
 // Start daily reset scheduler (Istanbul timezone)
 dailyResetService.start();
 
+// Start Firebase monitor
+firebaseMonitor.start();
+
 // Start patch notes checking when bot is ready
-client.once('ready', (client) => {
+client.once('ready', async (client) => {
+  Logger.info('Bot başlatılıyor...');
+  
+  // Recover unprocessed quest tracking events from Firebase
+  const recovered = await questTrackingQueue.recoverUnprocessedEvents();
+  Logger.info('Quest tracking recovery complete', { recoveredEvents: recovered });
+  
   patchNotesService.startChecking(client);
   
   // Hatırlatıcı kontrolü (her dakika)

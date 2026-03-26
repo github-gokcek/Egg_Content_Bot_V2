@@ -7,7 +7,8 @@
     "build": "tsc || exit 0",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "deploy": "tsx src/deploy-commands.ts"
+    "deploy": "tsx src/deploy-commands.ts",
+    "setup": "tsx src/check-setup.ts"
   },
   "keywords": [],
   "author": "",

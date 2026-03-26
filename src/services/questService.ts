@@ -2,6 +2,7 @@ import { db } from './firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { databaseService } from './databaseService';
 import { dailyStatsService } from './dailyStatsService';
+import { questTrackingQueue } from './questTrackingQueue';
 import { Logger } from '../utils/logger';
 
 export interface Quest {
@@ -333,52 +334,80 @@ class QuestService {
   }
 
   async trackMessage(userId: string, message: any): Promise<void> {
+    // Queue the tracking event asynchronously (don't wait)
     this.trackMessageAsync(userId, message).catch(error => {
       Logger.error('trackMessage async error', error);
     });
   }
 
   private async trackMessageAsync(userId: string, message: any): Promise<void> {
-    // Daily stats'e kaydet
-    await dailyStatsService.incrementMessage(userId, message.channelId);
+    try {
+      // Queue event instead of immediately writing to Firebase
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'message',
+        timestamp: Date.now(),
+        data: {
+          channelId: message.channelId,
+          messageId: message.id,
+          hasReplies: !!message.reference?.messageId,
+          hasMentions: message.mentions?.users?.size > 0,
+          mentionedUserIds: Array.from(message.mentions?.users?.values() || [])
+            .filter(u => u.id !== userId && !u.bot)
+            .map(u => u.id),
+        },
+      });
 
-    // Mention tracking
-    if (message.mentions?.users && message.mentions.users.size > 0) {
-      for (const user of message.mentions.users.values()) {
-        if (user.id !== userId && !user.bot) {
-          await dailyStatsService.addMention(userId, user.id);
+      // Get current quest progress asynchronously
+      let userQuests = await this.getUserQuests(userId);
+      if (!userQuests) {
+        userQuests = await this.initializeUserQuests(userId);
+      }
+
+      // Update daily stats in background (still important for voice/activity tracking)
+      await dailyStatsService.incrementMessage(userId, message.channelId);
+
+      // Mention tracking
+      if (message.mentions?.users && message.mentions.users.size > 0) {
+        for (const user of message.mentions.users.values()) {
+          if (user.id !== userId && !user.bot) {
+            await dailyStatsService.addMention(userId, user.id);
+          }
         }
       }
-    }
 
-    // Reply tracking
-    if (message.reference?.messageId) {
-      try {
-        const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-        if (repliedMessage && repliedMessage.author.id !== userId && !repliedMessage.author.bot) {
-          await dailyStatsService.addReply(userId, repliedMessage.author.id);
+      // Reply tracking
+      if (message.reference?.messageId) {
+        try {
+          const repliedMessage = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+          if (repliedMessage && repliedMessage.author.id !== userId && !repliedMessage.author.bot) {
+            await dailyStatsService.addReply(userId, repliedMessage.author.id);
+          }
+        } catch (error) {
+          Logger.debug('Reply tracking error', error);
         }
-      } catch (error) {
-        Logger.error('Reply tracking error', error);
       }
-    }
 
-    // Emoji tracking
-    const emojiRegex = /<a?:[\w_]+:\d+>|[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F300}-\u{1FAFF}]|[\u{E0020}-\u{E007F}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA70}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{203C}]|[\u{2049}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{00A9}]|[\u{00AE}]|[\u{2122}]|[\u{2139}]|[\u{2194}-\u{2199}]|[\u{21A9}-\u{21AA}]|[\u{231A}-\u{231B}]|[\u{2328}]|[\u{23CF}]|[\u{23E9}-\u{23F3}]|[\u{23F8}-\u{23FA}]|[\u{24C2}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2600}-\u{2604}]|[\u{260E}]|[\u{2611}]|[\u{2614}-\u{2615}]|[\u{2618}]|[\u{261D}]|[\u{2620}]|[\u{2622}-\u{2623}]|[\u{2626}]|[\u{262A}]|[\u{262E}-\u{262F}]|[\u{2638}-\u{263A}]|[\u{2640}]|[\u{2642}]|[\u{2648}-\u{2653}]|[\u{265F}-\u{2660}]|[\u{2663}]|[\u{2665}-\u{2666}]|[\u{2668}]|[\u{267B}]|[\u{267E}-\u{267F}]|[\u{2692}-\u{2697}]|[\u{2699}]|[\u{269B}-\u{269C}]|[\u{26A0}-\u{26A1}]|[\u{26A7}]|[\u{26AA}-\u{26AB}]|[\u{26B0}-\u{26B1}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26C8}]|[\u{26CE}]|[\u{26CF}]|[\u{26D1}]|[\u{26D3}-\u{26D4}]|[\u{26E9}-\u{26EA}]|[\u{26F0}-\u{26F5}]|[\u{26F7}-\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{2934}-\u{2935}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{2B50}]|[\u{2B55}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]/gu;
-    const emojis = message.content?.match(emojiRegex);
-    if (emojis) {
-      for (const emoji of emojis) {
-        await dailyStatsService.addEmoji(userId, emoji);
+      // Emoji tracking
+      const emojiRegex = /<a?:[\w_]+:\d+>|[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F300}-\u{1FAFF}]|[\u{E0020}-\u{E007F}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA70}-\u{1FAFF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{203C}]|[\u{2049}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{00A9}]|[\u{00AE}]|[\u{2122}]|[\u{2139}]|[\u{2194}-\u{2199}]|[\u{21A9}-\u{21AA}]|[\u{231A}-\u{231B}]|[\u{2328}]|[\u{23CF}]|[\u{23E9}-\u{23F3}]|[\u{23F8}-\u{23FA}]|[\u{24C2}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2600}-\u{2604}]|[\u{260E}]|[\u{2611}]|[\u{2614}-\u{2615}]|[\u{2618}]|[\u{261D}]|[\u{2620}]|[\u{2622}-\u{2623}]|[\u{2626}]|[\u{262A}]|[\u{262E}-\u{262F}]|[\u{2638}-\u{263A}]|[\u{2640}]|[\u{2642}]|[\u{2648}-\u{2653}]|[\u{265F}-\u{2660}]|[\u{2663}]|[\u{2665}-\u{2666}]|[\u{2668}]|[\u{267B}]|[\u{267E}-\u{267F}]|[\u{2692}-\u{2697}]|[\u{2699}]|[\u{269B}-\u{269C}]|[\u{26A0}-\u{26A1}]|[\u{26A7}]|[\u{26AA}-\u{26AB}]|[\u{26B0}-\u{26B1}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26C8}]|[\u{26CE}]|[\u{26CF}]|[\u{26D1}]|[\u{26D3}-\u{26D4}]|[\u{26E9}-\u{26EA}]|[\u{26F0}-\u{26F5}]|[\u{26F7}-\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{2934}-\u{2935}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{2B50}]|[\u{2B55}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]/gu;
+      const emojis = message.content?.match(emojiRegex);
+      if (emojis) {
+        for (const emoji of emojis) {
+          await dailyStatsService.addEmoji(userId, emoji);
+        }
       }
-    }
 
-    // Quest progress güncelle
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      // Queue quest progress update
+      await this.updateQuestProgressFromDailyStats(userQuests);
+      questTrackingQueue.queueQuestUpdate(userId, {
+        messageCount: userQuests.messageCount,
+        channelsMessaged: Array.from(userQuests.channelsMessaged || []),
+        mentionedUsers: Array.from(userQuests.mentionedUsers || []),
+        emojisUsed: Array.from(userQuests.emojisUsed || []),
+      });
+    } catch (error) {
+      Logger.error('trackMessageAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackVoice(userId: string, minutes: number): Promise<void> {
@@ -388,20 +417,25 @@ class QuestService {
   }
 
   private async trackVoiceAsync(userId: string, minutes: number): Promise<void> {
-    // Daily stats'e kaydet (incremental değil, total)
-    const dailyStats = await dailyStatsService.getDailyStats(userId);
-    const increment = minutes - dailyStats.voiceMinutes;
-    if (increment > 0) {
-      await dailyStatsService.incrementVoiceMinutes(userId, increment);
-    }
+    try {
+      // Queue event
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'voice_activity',
+        timestamp: Date.now(),
+        data: { minutes },
+      });
 
-    // Quest progress güncelle
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      // Daily stats'e kaydet
+      const dailyStats = await dailyStatsService.getDailyStats(userId);
+      const increment = minutes - dailyStats.voiceMinutes;
+      if (increment > 0) {
+        await dailyStatsService.incrementVoiceMinutes(userId, increment);
+        questTrackingQueue.queueQuestUpdate(userId, { voiceMinutes: increment });
+      }
+    } catch (error) {
+      Logger.error('trackVoiceAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackReactionGiven(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
@@ -411,29 +445,36 @@ class QuestService {
   }
 
   private async trackReactionGivenAsync(userId: string, messageId: string, messageAuthorId?: string, emoji?: string): Promise<void> {
-    await dailyStatsService.incrementReactionGiven(userId);
-    if (emoji) {
-      await dailyStatsService.addEmoji(userId, emoji);
-    }
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'reaction_given',
+        timestamp: Date.now(),
+        data: { messageId, messageAuthorId, emoji },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
-    }
+      await dailyStatsService.incrementReactionGiven(userId);
+      if (emoji) {
+        await dailyStatsService.addEmoji(userId, emoji);
+      }
 
-    // Unique tracking için userQuests kullan (günlük stats'te Set yok)
-    if (messageId) {
-      userQuests.reactionGivenToMessages.add(messageId);
-    }
-    if (messageAuthorId && messageAuthorId !== userId) {
-      userQuests.reactionGivenToUsers.add(messageAuthorId);
-    }
-    if (emoji) {
-      userQuests.reactionEmojisUsed.add(emoji);
-    }
+      let updates: any = {};
+      if (messageId) {
+        updates.reactionGivenToMessages = [messageId];
+      }
+      if (messageAuthorId && messageAuthorId !== userId) {
+        updates.reactionGivenToUsers = [messageAuthorId];
+      }
+      if (emoji) {
+        updates.reactionEmojisUsed = [emoji];
+      }
 
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
+      if (Object.keys(updates).length > 0) {
+        questTrackingQueue.queueQuestUpdate(userId, updates);
+      }
+    } catch (error) {
+      Logger.error('trackReactionGivenAsync error', error);
+    }
   }
 
   async trackReactionReceived(userId: string, messageId: string): Promise<void> {
@@ -443,18 +484,19 @@ class QuestService {
   }
 
   private async trackReactionReceivedAsync(userId: string, messageId: string): Promise<void> {
-    await dailyStatsService.incrementReactionReceived(userId);
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'reaction_received',
+        timestamp: Date.now(),
+        data: { messageId },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      await dailyStatsService.incrementReactionReceived(userId);
+      questTrackingQueue.queueQuestUpdate(userId, { reactionsReceived: 1 });
+    } catch (error) {
+      Logger.error('trackReactionReceivedAsync error', error);
     }
-
-    const current = userQuests.reactionsReceived.get(messageId) || 0;
-    userQuests.reactionsReceived.set(messageId, current + 1);
-
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackReplyReceived(userId: string, messageId: string): Promise<void> {
@@ -489,21 +531,16 @@ class QuestService {
   }
 
   private async trackRastgeleUsedAsync(userId: string): Promise<void> {
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'rastgele_used',
+        timestamp: Date.now(),
+        data: {},
+      });
+    } catch (error) {
+      Logger.error('trackRastgeleUsedAsync error', error);
     }
-
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
-    }
-    
-    // Rastgele komutu kullanıldı - şu an için bir görev yok ama gelecekte eklenebilir
-
-    await this.updateQuestProgress(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   // Casino tracking fonksiyonları
@@ -514,21 +551,18 @@ class QuestService {
   }
 
   private async trackDailyCommandAsync(userId: string): Promise<void> {
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
-    }
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'daily_command',
+        timestamp: Date.now(),
+        data: {},
+      });
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
+      questTrackingQueue.queueQuestUpdate(userId, { usedDailyCommand: true });
+    } catch (error) {
+      Logger.error('trackDailyCommandAsync error', error);
     }
-    
-    userQuests.usedDailyCommand = true;
-
-    await this.updateQuestProgress(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackSlotPlay(userId: string): Promise<void> {
@@ -538,14 +572,19 @@ class QuestService {
   }
 
   private async trackSlotPlayAsync(userId: string): Promise<void> {
-    await dailyStatsService.incrementCasinoPlay(userId, 'slot');
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_play',
+        timestamp: Date.now(),
+        data: { gameType: 'slot' },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      await dailyStatsService.incrementCasinoPlay(userId, 'slot');
+      questTrackingQueue.queueQuestUpdate(userId, { slotPlays: 1 });
+    } catch (error) {
+      Logger.error('trackSlotPlayAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackBlackjackPlay(userId: string, won: boolean = false): Promise<void> {
@@ -555,23 +594,25 @@ class QuestService {
   }
 
   private async trackBlackjackPlayAsync(userId: string, won: boolean = false): Promise<void> {
-    await dailyStatsService.incrementCasinoPlay(userId, 'blackjack');
-    if (won) {
-      await dailyStatsService.incrementCasinoWin(userId);
-    }
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_play',
+        timestamp: Date.now(),
+        data: { gameType: 'blackjack', won },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      await dailyStatsService.incrementCasinoPlay(userId, 'blackjack');
+      
+      let updates: any = { blackjackPlays: 1 };
+      if (won) {
+        await dailyStatsService.incrementCasinoWin(userId);
+        updates.blackjackWins = 1;
+      }
+      questTrackingQueue.queueQuestUpdate(userId, updates);
+    } catch (error) {
+      Logger.error('trackBlackjackPlayAsync error', error);
     }
-
-    // Blackjack win tracking (userQuests'te tutulacak)
-    if (won) {
-      userQuests.blackjackWins++;
-    }
-
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackCoinflipPlay(userId: string): Promise<void> {
@@ -581,14 +622,19 @@ class QuestService {
   }
 
   private async trackCoinflipPlayAsync(userId: string): Promise<void> {
-    await dailyStatsService.incrementCasinoPlay(userId, 'coinflip');
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_play',
+        timestamp: Date.now(),
+        data: { gameType: 'coinflip' },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      await dailyStatsService.incrementCasinoPlay(userId, 'coinflip');
+      questTrackingQueue.queueQuestUpdate(userId, { coinflipPlays: 1 });
+    } catch (error) {
+      Logger.error('trackCoinflipPlayAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackCrashPlay(userId: string): Promise<void> {
@@ -598,14 +644,19 @@ class QuestService {
   }
 
   private async trackCrashPlayAsync(userId: string): Promise<void> {
-    await dailyStatsService.incrementCasinoPlay(userId, 'crash');
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_play',
+        timestamp: Date.now(),
+        data: { gameType: 'crash' },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      await dailyStatsService.incrementCasinoPlay(userId, 'crash');
+      questTrackingQueue.queueQuestUpdate(userId, { crashPlays: 1 });
+    } catch (error) {
+      Logger.error('trackCrashPlayAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackMinesTiles(userId: string, tiles: number): Promise<void> {
@@ -615,17 +666,24 @@ class QuestService {
   }
 
   private async trackMinesTilesAsync(userId: string, tiles: number): Promise<void> {
-    // Mines için her tile bir play sayılır
-    for (let i = 0; i < tiles; i++) {
-      await dailyStatsService.incrementCasinoPlay(userId, 'mines');
-    }
+    try {
+      // Queue single event with tile count instead of N separate events
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_play',
+        timestamp: Date.now(),
+        data: { gameType: 'mines', tilesRevealed: tiles },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      // Single increment instead of loop
+      for (let i = 0; i < tiles; i++) {
+        await dailyStatsService.incrementCasinoPlay(userId, 'mines');
+      }
+
+      questTrackingQueue.queueQuestUpdate(userId, { minesPlays: tiles });
+    } catch (error) {
+      Logger.error('trackMinesTilesAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackCasinoSpent(userId: string, amount: number): Promise<void> {
@@ -635,14 +693,23 @@ class QuestService {
   }
 
   private async trackCasinoSpentAsync(userId: string, amount: number): Promise<void> {
-    await dailyStatsService.incrementCasinoSpent(userId, amount);
+    try {
+      // Queue event
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_spent',
+        timestamp: Date.now(),
+        data: { amount },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      // Update daily stats
+      await dailyStatsService.incrementCasinoSpent(userId, amount);
+
+      // Queue quest update
+      questTrackingQueue.queueQuestUpdate(userId, { casinoSpent: amount });
+    } catch (error) {
+      Logger.error('trackCasinoSpentAsync error', error);
     }
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackCasinoWin(userId: string, amount: number, isSingleBet: boolean = false): Promise<void> {
@@ -652,21 +719,34 @@ class QuestService {
   }
 
   private async trackCasinoWinAsync(userId: string, amount: number, isSingleBet: boolean = false): Promise<void> {
-    await dailyStatsService.incrementCasinoWin(userId);
+    try {
+      // Queue event
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'casino_win',
+        timestamp: Date.now(),
+        data: { amount, isSingleBet },
+      });
 
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
+      // Update daily stats
+      await dailyStatsService.incrementCasinoWin(userId);
+
+      // Get current quest to update biggestSingleWin
+      let userQuests = await this.getUserQuests(userId);
+      if (!userQuests) {
+        userQuests = await this.initializeUserQuests(userId);
+      }
+
+      let updates: any = { casinoWins: amount };
+      if (isSingleBet && amount > userQuests.biggestSingleWin) {
+        userQuests.biggestSingleWin = amount;
+        updates.biggestSingleWin = amount;
+      }
+
+      questTrackingQueue.queueQuestUpdate(userId, updates);
+    } catch (error) {
+      Logger.error('trackCasinoWinAsync error', error);
     }
-
-    // Casino wins ve biggest single win userQuests'te tutulacak
-    userQuests.casinoWins += amount;
-    if (isSingleBet && amount > userQuests.biggestSingleWin) {
-      userQuests.biggestSingleWin = amount;
-    }
-
-    await this.updateQuestProgressFromDailyStats(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   async trackDuelloWin(userId: string): Promise<void> {
@@ -676,21 +756,18 @@ class QuestService {
   }
 
   private async trackDuelloWinAsync(userId: string): Promise<void> {
-    let userQuests = await this.getUserQuests(userId);
-    if (!userQuests) {
-      userQuests = await this.initializeUserQuests(userId);
-    }
+    try {
+      questTrackingQueue.addEvent({
+        userId,
+        eventType: 'duello_win',
+        timestamp: Date.now(),
+        data: {},
+      });
 
-    const resetOccurred = await this.checkAndResetDaily(userId);
-    if (resetOccurred) {
-      userQuests = await this.getUserQuests(userId);
-      if (!userQuests) return;
+      questTrackingQueue.queueQuestUpdate(userId, { duelloWins: 1 });
+    } catch (error) {
+      Logger.error('trackDuelloWinAsync error', error);
     }
-    
-    userQuests.duelloWins++;
-
-    await this.updateQuestProgress(userQuests);
-    await this.saveUserQuests(userQuests);
   }
 
   private async updateQuestProgressFromDailyStats(userQuests: UserQuests): Promise<void> {

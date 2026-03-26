@@ -1,9 +1,11 @@
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { monitoredGetDoc, monitoredUpdateDoc, doc } from './monitoredFirebase';
 import { DailyStats, TotalStats } from '../types';
 import { Logger } from '../utils/logger';
+import { CachedFieldUpdater } from './batchingUtil';
 
 const ISTANBUL_OFFSET = 3 * 60 * 60 * 1000; // UTC+3
+const CACHE_TTL = 30000; // 30 seconds
 
 function getIstanbulDate(): string {
   const now = new Date(Date.now() + ISTANBUL_OFFSET);
@@ -34,22 +36,34 @@ function createEmptyDailyStats(): DailyStats {
 }
 
 export class DailyStatsService {
+  private cache = new CachedFieldUpdater(); // In-memory cache for daily stats
+
   async getDailyStats(userId: string): Promise<DailyStats> {
     try {
-      const userDoc = await getDoc(doc(db, 'players', userId));
+      // Check cache first
+      const cached = this.cache.get(`dailyStats_${userId}`);
+      if (cached) {
+        Logger.debug('Daily stats from cache', { userId });
+        return cached;
+      }
+
+      const userDoc = await monitoredGetDoc(doc(db, 'players', userId));
       if (!userDoc.exists()) {
-        return createEmptyDailyStats();
+        const empty = createEmptyDailyStats();
+        this.cache.set(`dailyStats_${userId}`, empty);
+        return empty;
       }
 
       const data = userDoc.data();
       const dailyStats = data.dailyStats;
       
       if (!dailyStats || dailyStats.date !== getIstanbulDate()) {
-        return createEmptyDailyStats();
+        const empty = createEmptyDailyStats();
+        this.cache.set(`dailyStats_${userId}`, empty);
+        return empty;
       }
 
-      // Convert arrays back to Sets
-      return {
+      const stats = {
         ...dailyStats,
         mentionsGiven: new Set(dailyStats.mentionsGiven || []),
         repliesGiven: new Set(dailyStats.repliesGiven || []),
@@ -57,9 +71,15 @@ export class DailyStatsService {
         channelsUsed: new Set(dailyStats.channelsUsed || []),
         hourlyActivity: new Set(dailyStats.hourlyActivity || [])
       };
+
+      // Cache it
+      this.cache.set(`dailyStats_${userId}`, stats);
+      return stats;
     } catch (error) {
       Logger.error('Daily stats getirilemedi', error);
-      return createEmptyDailyStats();
+      const empty = createEmptyDailyStats();
+      this.cache.set(`dailyStats_${userId}`, empty);
+      return empty;
     }
   }
 
@@ -68,7 +88,6 @@ export class DailyStatsService {
       const currentStats = await this.getDailyStats(userId);
       const merged = { ...currentStats, ...updates };
 
-      // Convert Sets to arrays for Firebase
       const forFirebase = {
         ...merged,
         mentionsGiven: Array.from(merged.mentionsGiven),
@@ -78,11 +97,16 @@ export class DailyStatsService {
         hourlyActivity: Array.from(merged.hourlyActivity)
       };
 
-      await updateDoc(doc(db, 'players', userId), {
+      await monitoredUpdateDoc(doc(db, 'players', userId), {
         dailyStats: forFirebase
       });
+
+      // Update cache after successful write
+      this.cache.set(`dailyStats_${userId}`, merged);
     } catch (error) {
       Logger.error('Daily stats güncellenemedi', error);
+      // Invalidate cache on error to force fresh read next time
+      this.cache.invalidate(`dailyStats_${userId}`);
     }
   }
 
@@ -110,7 +134,6 @@ export class DailyStatsService {
     stats.voiceMinutes += minutes;
     await this.updateDailyStats(userId, stats);
     
-    // Update total stats
     await this.incrementTotalVoiceMinutes(userId, minutes);
   }
 
@@ -155,10 +178,9 @@ export class DailyStatsService {
     await this.updateDailyStats(userId, stats);
   }
 
-  // Total stats
   async getTotalStats(userId: string): Promise<TotalStats> {
     try {
-      const userDoc = await getDoc(doc(db, 'players', userId));
+      const userDoc = await monitoredGetDoc(doc(db, 'players', userId));
       if (!userDoc.exists()) {
         return { voiceMinutesTotal: 0, casinoWinsTotal: 0 };
       }
@@ -176,7 +198,7 @@ export class DailyStatsService {
       const totalStats = await this.getTotalStats(userId);
       totalStats.voiceMinutesTotal += minutes;
       
-      await updateDoc(doc(db, 'players', userId), {
+      await monitoredUpdateDoc(doc(db, 'players', userId), {
         totalStats
       });
     } catch (error) {
@@ -189,7 +211,7 @@ export class DailyStatsService {
       const totalStats = await this.getTotalStats(userId);
       totalStats.casinoWinsTotal += 1;
       
-      await updateDoc(doc(db, 'players', userId), {
+      await monitoredUpdateDoc(doc(db, 'players', userId), {
         totalStats
       });
     } catch (error) {
@@ -209,14 +231,34 @@ export class DailyStatsService {
         hourlyActivity: []
       };
 
-      await updateDoc(doc(db, 'players', userId), {
+      await monitoredUpdateDoc(doc(db, 'players', userId), {
         dailyStats: forFirebase
       });
+      
+      // Clear cache for this user
+      this.cache.invalidate(`dailyStats_${userId}`);
       
       Logger.info(`Daily stats sıfırlandı: ${userId}`);
     } catch (error) {
       Logger.error('Daily stats sıfırlanamadı', error);
+      // Invalidate cache on error
+      this.cache.invalidate(`dailyStats_${userId}`);
     }
+  }
+
+  /**
+   * Clear all cached data (useful for testing or memory management)
+   */
+  clearCache(): void {
+    this.cache.clear();
+    Logger.debug('Daily stats cache cleared');
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): any {
+    return this.cache.get('_stats') || { cacheSize: 0 };
   }
 }
 

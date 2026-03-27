@@ -104,9 +104,19 @@ export class DailyStatsService {
       // Update cache after successful write
       this.cache.set(`dailyStats_${userId}`, merged);
     } catch (error) {
-      Logger.error('Daily stats güncellenemedi', error);
-      // Invalidate cache on error to force fresh read next time
-      this.cache.invalidate(`dailyStats_${userId}`);
+      // Log error but don't crash - quota issues are temporary
+      if (error instanceof Error && error.message.includes('RESOURCE_EXHAUSTED')) {
+        // Quietly handle quota exceeded - data will be retried later
+        // Update cache anyway for local tracking
+        this.cache.set(`dailyStats_${userId}`, {
+          ...await this.getDailyStats(userId),
+          ...updates
+        });
+      } else {
+        Logger.warn('Daily stats update failed', error instanceof Error ? error.message : error);
+        // Invalidate cache on other errors to force fresh read next time
+        this.cache.invalidate(`dailyStats_${userId}`);
+      }
     }
   }
 

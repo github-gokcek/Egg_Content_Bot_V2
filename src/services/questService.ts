@@ -770,11 +770,11 @@ class QuestService {
     }
   }
 
-  private async updateQuestProgressFromDailyStats(userQuests: UserQuests): Promise<void> {
-    // Daily stats'ten veri çek
-    const dailyStats = await dailyStatsService.getDailyStats(userQuests.userId);
-
-    // Günlük görevleri güncelle
+  async updateQuestProgressFromDailyStats(userQuests: UserQuests): Promise<void> {
+    // Recalculate quest progress from dailyStats
+    // Called when displaying quests to show fresh progress values
+    try {
+      const dailyStats = await dailyStatsService.getDailyStats(userQuests.userId);
     for (const quest of userQuests.quests) {
       if (quest.completed) continue;
 
@@ -937,6 +937,10 @@ class QuestService {
         await this.giveReward(userQuests.userId, special.reward);
         Logger.success('Special quest completed!', { userId: userQuests.userId, questId: special.id, reward: special.reward });
       }
+    }
+    } catch (error) {
+      Logger.error('Quest progress update error', error);
+      // Continue anyway - don't break the flow
     }
   }
 

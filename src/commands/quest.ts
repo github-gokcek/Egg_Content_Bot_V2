@@ -30,6 +30,10 @@ module.exports = {
       });
     }
 
+    // Recalculate progress from dailyStats for fresh values
+    // This ensures /quest always shows up-to-date progress without extra writes
+    await questService.updateQuestProgressFromDailyStats(userQuests);
+
     const completedCount = userQuests.quests.filter(q => q.completed).length;
     const totalReward = userQuests.quests
       .filter(q => q.completed)

@@ -30,6 +30,9 @@ export class QuestTrackingQueue {
   private deduplicator = new EventDeduplicator();
   private isRecovering = false;
   private recoveredEvents = new Set<string>(); // Track recovered event hashes
+  private consecutiveFailures = 0; // Track failed flushes
+  private readonly MAX_FAILURES = 10; // Stop retrying after 10 failures
+  private lastFlushError: Date | null = null;
 
   constructor() {
     // Start periodic flush
@@ -42,10 +45,7 @@ export class QuestTrackingQueue {
   addEvent(event: Omit<QuestTrackingEvent, 'id' | 'processed'>): void {
     // Deduplication check
     if (this.deduplicator.isDuplicate({ ...event, data: {} })) {
-      Logger.debug('Duplicate event filtered', {
-        userId: event.userId,
-        eventType: event.eventType,
-      });
+      // Silently skip duplicate event
       return;
     }
 
@@ -56,12 +56,6 @@ export class QuestTrackingQueue {
       processed: false,
     });
     this.pendingEvents.set(userId, events);
-
-    Logger.debug('Event queued', {
-      userId,
-      eventType: event.eventType,
-      queueSize: events.length,
-    });
   }
 
   /**
@@ -90,19 +84,25 @@ export class QuestTrackingQueue {
    */
   async flush(): Promise<boolean> {
     if (this.pendingEvents.size === 0 && this.pendingQuestUpdates.size === 0) {
+      // Success - reset failure counter
+      this.consecutiveFailures = 0;
       return true;
     }
 
-    Logger.info('Flushing quest tracking queue', {
-      eventUsers: this.pendingEvents.size,
-      questUpdateUsers: this.pendingQuestUpdates.size,
-    });
+    // Check if we've already failed too many times (quota might be completely exhausted)
+    if (this.consecutiveFailures >= this.MAX_FAILURES) {
+      Logger.warn('Quest queue: Too many flush failures, pausing writes', {
+        failures: this.consecutiveFailures,
+        pendingEvents: this.pendingEvents.size,
+      });
+      return false;
+    }
 
     try {
       const builder = new FirebaseBatchBuilder();
       const operations = [];
 
-      // Process pending events
+      // Process pending events (only batch, don't write to Firebase now)
       for (const [userId, events] of this.pendingEvents) {
         for (const event of events) {
           operations.push({
@@ -121,7 +121,6 @@ export class QuestTrackingQueue {
 
       // Process pending quest updates
       for (const [userId, updates] of this.pendingQuestUpdates) {
-        // Get current quest data first
         const questRef = doc(db, 'userQuests', userId);
         
         operations.push({
@@ -146,22 +145,44 @@ export class QuestTrackingQueue {
       const result = await builder.commit();
       
       if (result.success) {
-        Logger.success('Queue flushed', {
-          eventsCount: this.pendingEvents.size,
-          updatesCount: this.pendingQuestUpdates.size,
+        // Success - reset failure counter
+        this.consecutiveFailures = 0;
+        
+        Logger.info('Quest queue flushed', {
+          events: Array.from(this.pendingEvents.values()).reduce((sum, e) => sum + e.length, 0),
+          updates: this.pendingQuestUpdates.size,
         });
 
         // Clear after successful flush
         this.pendingEvents.clear();
         this.pendingQuestUpdates.clear();
       } else {
-        Logger.error('Queue flush failed', result.error);
+        // Increment failure counter
+        this.consecutiveFailures++;
+        this.lastFlushError = new Date();
+        
+        Logger.warn('Quest queue flush failed, retaining events', {
+          failure: this.consecutiveFailures,
+          error: result.error?.message || 'Unknown error',
+          pendingEvents: Array.from(this.pendingEvents.values()).reduce((sum, e) => sum + e.length, 0),
+          pendingUpdates: this.pendingQuestUpdates.size,
+        });
+        
         return false;
       }
 
       return true;
     } catch (error) {
-      Logger.error('Queue flush error', error);
+      // Increment failure counter on any exception
+      this.consecutiveFailures++;
+      this.lastFlushError = new Date();
+      
+      Logger.error('Quest queue flush exception', {
+        failure: this.consecutiveFailures,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
+      // Don't clear events - they're still pending
       return false;
     }
   }
@@ -207,7 +228,7 @@ export class QuestTrackingQueue {
       const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
-        Logger.info('No events to recover');
+        // No events to recover
         this.isRecovering = false;
         return 0;
       }
@@ -227,7 +248,6 @@ export class QuestTrackingQueue {
 
         // Skip if already recovered in this session
         if (this.recoveredEvents.has(eventHash)) {
-          Logger.debug('Skipping already recovered event', { eventHash });
           builder.addDelete(doc.ref);
           continue;
         }
@@ -287,6 +307,8 @@ export class QuestTrackingQueue {
     pendingUpdatesCount: number;
     totalUsers: number;
     isRecovering: boolean;
+    consecutiveFailures: number;
+    lastFlushError?: Date;
   } {
     const allUsers = new Set([
       ...this.pendingEvents.keys(),
@@ -301,6 +323,8 @@ export class QuestTrackingQueue {
       pendingUpdatesCount: this.pendingQuestUpdates.size,
       totalUsers: allUsers.size,
       isRecovering: this.isRecovering,
+      consecutiveFailures: this.consecutiveFailures,
+      lastFlushError: this.lastFlushError || undefined,
     };
   }
 
